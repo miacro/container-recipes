@@ -1,0 +1,9 @@
+*.pyc
+*.swp
+*~
+\#*
+.\#*
+
+/bundle
+/autoload/plug.vim
+/plugged
