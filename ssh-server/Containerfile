@@ -1,12 +1,59 @@
 FROM docker.io/library/debian:trixie
 
-RUN apt-get update && apt-get install -y \
-    apt-transport-https \
-    ca-certificates \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get update && apt-get install -y \
+  apt-transport-https \
+  ca-certificates
 
-RUN apt-get update && apt-get install -y \
-    openssh-server \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/*
+RUN mv /etc/apt/sources.list /etc/apt/sources.list.bak
+RUN mv /etc/apt/sources.list.d /etc/apt/sources.list.d.bak && \
+  mkdir -p /etc/apt/sources.list.d
+COPY ./files/tsinghua.sources /etc/apt/sources.list.d/tsinghua.sources
+COPY ./files/vscode.sources /etc/apt/sources.list.d/vscode.sources
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get update && apt-get install -y \
+  openssh-server \
+  build-essential \
+  cmake \
+  llvm-dev \
+  clang \
+  lldb \
+  lld \
+  lldb-dev \
+  clang-tools \
+  clang-format \
+  python3-dev \
+  python3-pip \
+  rustup \
+  \
+  git \
+  curl \
+  vcsh \
+  zsh \
+  code \
+  vim-nox \
+  emacs \
+  htop \
+  \
+  alacritty \
+  kitty \
+  rxvt-unicode
+
+
+RUN mkdir /var/run/sshd
+
+# Set a root password
+RUN echo 'root:<password>' | chpasswd
+# Permit root login over SSH
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+# Fix for PAM (Pluggable Authentication Modules) issues in some environments
+RUN sed -i 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' /etc/pam.d/sshd
+
+# Expose the SSH port
+EXPOSE 22
+# Start sshd in the foreground (-D) to keep the container running
+# CMD ["/usr/sbin/sshd", "-D"]
+ENTRYPOINT [ "/entrypoint" ]
