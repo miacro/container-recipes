@@ -45,8 +45,35 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   rxvt-unicode \
   tmux
 
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get install -y \
+  locales \
+  rsync \
+  swig 
+
+RUN set -i -E \
+  -e 's/# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g\' \
+  -e 's/# *zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/g\' \
+  /etc/locale.gen && \
+  echo 'LANG="en_US.UTF-8"' > /etc/locale.conf && \
+  locale-gen
+
+RUN ln -sf bash /bin/sh
 
 RUN mkdir -p /var/run/sshd
+RUN ssh-keygen -A
+RUN set -E -i \
+  -e 's/# *PubkeyAuthentication (yes|no)/PubkeyAuthentication yes/g\' \
+  -e 's/# *X11Forwarding (yes|no)/X11Forwarding yes/g\' \
+  -e 's/# *UseDNS (yes|no)/UseDNS no/g\' \
+  -e 's/# *PermitTTY (yes|no)/PermitTTY yes/g\' \
+  /etc/ssh/sshd_config
+
+# annoying file permission checking
+RUN set -E -i \
+  -e 's/# *StrictModes (yes|no)/StrictModes no/g\' \
+  /etc/ssh/sshd_config
 
 # Set a root password
 # RUN echo 'root:<password>' | chpasswd
@@ -60,9 +87,12 @@ EXPOSE 22
 # Start sshd in the foreground (-D) to keep the container running
 # CMD ["/usr/sbin/sshd", "-D"]
 COPY ./entrypoint /entrypoint
+COPY ./entrypoint.py /entrypoint.py
+COPY ./entrypoint.sh /entrypoint.sh
+ENV SSH_SERVING_UID=
 ENV SSH_SERVING_USER=
 ENV SSH_SERVING_SHELL=
-ENTRYPOINT [ "/entrypoint" ]
+CMD [ "/entrypoint.py" ]
 
 # COPY ./ssh-login-hook.sh /ssh-login-hook.sh
 # RUN echo "session optional pam_exec.so seteuid /ssh-login-hook.sh" >> /etc/pam.d/sshd
