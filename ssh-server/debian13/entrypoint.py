@@ -15,8 +15,8 @@ def run_cmd(cmd, cwd=None, capture=False):
     if result.returncode != 0:
         assert 0, "Command {} failed with return code {}".format(cmd, result.returncode)
     if capture:
-        res = result.stdout.decode("utf-8").strip()
-    return res
+        result = result.stdout.decode("utf-8").strip()
+    return result
 
 
 def get_cmd_path(cmd, path=None):

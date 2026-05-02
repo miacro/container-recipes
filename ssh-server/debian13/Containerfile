@@ -63,16 +63,16 @@ RUN ln -sf bash /bin/sh
 
 RUN mkdir -p /var/run/sshd
 RUN ssh-keygen -A
-RUN set -E -i \
-  -e 's/# *PubkeyAuthentication (yes|no)/PubkeyAuthentication yes/g\' \
-  -e 's/# *X11Forwarding (yes|no)/X11Forwarding yes/g\' \
-  -e 's/# *UseDNS (yes|no)/UseDNS no/g\' \
-  -e 's/# *PermitTTY (yes|no)/PermitTTY yes/g\' \
+RUN sed -E -i \
+  -e 's/# *PubkeyAuthentication (yes|no)/PubkeyAuthentication yes/g' \
+  -e 's/# *X11Forwarding (yes|no)/X11Forwarding yes/g' \
+  -e 's/# *UseDNS (yes|no)/UseDNS no/g' \
+  -e 's/# *PermitTTY (yes|no)/PermitTTY yes/g' \
   /etc/ssh/sshd_config
 
 # annoying file permission checking
-RUN set -E -i \
-  -e 's/# *StrictModes (yes|no)/StrictModes no/g\' \
+RUN sed -E -i \
+  -e 's/# *StrictModes (yes|no)/StrictModes no/g' \
   /etc/ssh/sshd_config
 
 # Set a root password
@@ -92,11 +92,6 @@ COPY ./entrypoint.sh /entrypoint.sh
 ENV SSH_SERVING_UID=
 ENV SSH_SERVING_USER=
 ENV SSH_SERVING_SHELL=
-CMD [ "/entrypoint.py" ]
-
 # COPY ./ssh-login-hook.sh /ssh-login-hook.sh
 # RUN echo "session optional pam_exec.so seteuid /ssh-login-hook.sh" >> /etc/pam.d/sshd
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,target=/var/lib/apt,sharing=locked \
-  apt-get update && apt-get install -y \
-  podman
+CMD [ "/entrypoint.py" ]
