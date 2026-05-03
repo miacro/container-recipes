@@ -5,9 +5,12 @@ import subprocess
 import sys
 import shlex
 import shutil
-import getpass
 import logging
 import socket
+import json
+import pwd
+import time
+import re
 
 
 def cmd_run(cmd, cwd=None, capture=False):
@@ -51,13 +54,40 @@ def cmd_get_path(cmd, path=None):
     return cmd_path
 
 
+def cmd_run_podman(command, cwd=None, capture=False):
+    env_text = "PODMAN_IGNORE_CGROUPSV1_WARNING=1"
+    cmd = "{} {}".format(env_text, command)
+    return cmd_run(cmd, cwd=cwd, capture=capture)
+
+
+def get_user_info():
+    pwd_user = pwd.getpwuid(os.getuid())
+    user_name = pwd_user.pw_name
+    user_id = pwd_user.pw_uid
+    user_home = pwd_user.pw_dir
+    user_shell = pwd_user.pw_shell
+    return user_name, user_id, user_shell, user_home
+
+
+def remove_line_comments(lines, prefix="#"):
+    assert isinstance(lines, str), lines
+    pattern = re.escape(prefix) + r"[^\n]*\n"
+    return re.sub(pattern, "\n", lines)
+
+
+def load_json_file(filename):
+    with open(filename, "rt") as f:
+        lines = f.read()
+        lines = remove_line_comments(lines, "//")
+        return json.loads(lines)
+
+
 def list_all_images():
     podman_path = cmd_get_path("podman")
     if podman_path is None:
         return []
-    list_cmd = "%s image list --format '{{.ID}} {{.Repository}} {{.Tag}}'"
-    list_cmd = list_cmd % podman_path
-    images = cmd_run(list_cmd, capture=True).splitlines()
+    list_cmd = "podman image list --format '{{.ID}} {{.Repository}} {{.Tag}}'"
+    images = cmd_run_podman(list_cmd, capture=True).splitlines()
     result = []
     for line in images:
         image_id, image_repo, image_tag = line.split(" ")
@@ -131,8 +161,7 @@ def exec_via_ssh(ssh_host, ssh_port, command, tty=False):
     command = cmd_join(command)
     command = "cd {} && {}".format(os.getcwd(), command)
     ssh_path = cmd_get_path("ssh")
-    ssh_user = getpass.getuser()
-    ssh_home = os.path.expanduser("~")
+    ssh_user, _, _, ssh_home = get_user_info()
     log_level = logging.getLogger().getEffectiveLevel()
     if log_level <= logging.DEBUG:
         log_text = "DEBUG"
@@ -178,6 +207,157 @@ def exec_via_ssh(ssh_host, ssh_port, command, tty=False):
     return
 
 
+def get_container_name(image):
+    if isinstance(image, str):
+        image_name = image
+    elif isinstance(image, dict):
+        image_name = image["repo"]
+    local_prefix = "localhost/"
+    if image_name.startswith(local_prefix):
+        image_name = image_name[len(local_prefix) :]
+    return image_name.replace("/", "-")
+
+
+def get_container_info(image):
+    container_name = get_container_name(image)
+    command = "podman inspect {}".format(container_name)
+    info = cmd_run_podman(command, capture=True)
+    info = json.loads(info)
+    assert info, (image, container_name, info)
+    info = info[0]
+    result = {
+        k: info[k]
+        for k in ["Id", "Path", "Args", "Image", "ImageName", "Name", "State"]
+    }
+    ports = info["NetworkSettings"]["Ports"]
+    host_port = ports["22/tcp"][0]["HostPort"]
+    result["HostPort"] = host_port
+    return result
+
+
+def init_policy_file():
+    policy_file = os.path.join("~", ".config", "containers", "policy.json")
+    policy_file = os.path.expanduser(policy_file)
+    policy_data = {}
+    if os.path.exists(policy_file):
+        policy_data = load_json_file(policy_file)
+        if not isinstance(policy_data, dict):
+            policy_data = {}
+    default_pre = policy_data.get("default", [])
+    if not isinstance(default_pre, list):
+        default_pre = []
+    default_new = []
+    matched = False
+    changed = False
+    for item in default_pre:
+        if not isinstance(item, dict) or "type" not in item:
+            changed = True
+            continue
+        default_new.append(item)
+        if item["type"] == "insecureAcceptAnything":
+            matched = True
+    if not matched:
+        default_new.append({"type": "insecureAcceptAnything"})
+        changed = True
+    if not changed:
+        return
+    policy_data["default"] = default_new
+    if not os.path.exists(os.path.dirname(policy_file)):
+        os.makedirs(os.path.dirname(policy_file))
+    with open(policy_file, "wt") as f:
+        json.dump(policy_data, f)
+    return
+
+
+def check_port_alive(port, host="127.0.0.1"):
+    if isinstance(port, str):
+        port = int(port)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as stream:
+        stream.settimeout(1)
+        return stream.connect_ex((host, port)) == 0
+
+
+def start_container(image, volume_maps=None, fresh_container=False):
+    container_name = get_container_name(image)
+    check_cmd = 'podman ps --no-trunc -q -f name="^{}$"'.format(container_name)
+    container_id = cmd_run_podman(check_cmd, capture=True)
+    if container_id and not fresh_container:
+        logging.info("Container {} already running".format(container_name))
+        return
+    if container_id:
+        cmd_run_podman("podman stop --time=30 {}".format(container_id))
+    check_cmd = 'podman ps -a --no-trunc -q -f name="^{}$"'.format(container_name)
+    container_id = cmd_run_podman(check_cmd, capture=True)
+    if container_id and not fresh_container:
+        logging.info("Container {} already exists, starting".format(container_name))
+        start_cmd = "podman start {}".format(container_id)
+        cmd_run_podman(start_cmd)
+        return
+    if container_id:
+        cmd_run_podman("podman rm -f --time=32 {}".format(container_id))
+    logging.info("Container {} not found, creating".format(container_name))
+    image_id = image["id"]
+    user_name, user_id, user_shell, user_home = get_user_info()
+
+    start_cmd = """
+podman run -d \
+--name %s \
+-p 22 \
+--userns=keep-id \
+--group-add=keep-groups \
+--network=slirp4netns \
+--replace \
+--user=root \
+--env SSH_SERVING_UID=%s \
+--env SSH_SERVING_USER=%s \
+--env SSH_SERVING_SHELL=%s \
+%s \
+%s \
+%s
+"""
+    # ipc=host required by vscode
+    # pid=host required by htop/ps maybe,
+    #     but can sometimes prevent podman from properly cleaning up
+    #     background processes after the container exits
+    extra_args = ["--ipc=host"]
+    volume_args = [
+        "-v {}/.ssh:{}/.ssh:rw".format(user_home, user_home),
+        "-v {}:{}:rw".format(user_home, user_home),
+    ]
+    start_cmd = start_cmd % (
+        container_name,
+        user_id,
+        user_name,
+        user_shell,
+        " ".join(extra_args),
+        " ".join(volume_args),
+        image_id,
+    )
+    start_cmd = start_cmd.strip()
+    init_policy_file()
+    cmd_run_podman(start_cmd)
+    time.sleep(3)
+    max_seconds = 30
+    for i in range(max_seconds):
+        info = get_container_info(image)
+        state = info.get("State", {})
+        running = state.get("Running", False)
+        if running:
+            break
+        if i == max_seconds - 1:
+            assert 0, "Failed to start {}, State: {}".format(container_name, state)
+        time.sleep(1)
+    info = get_container_info(image)
+    ssh_port = info["HostPort"]
+    for i in range(max_seconds):
+        if check_port_alive(ssh_port):
+            break
+        if i == max_seconds - 1:
+            assert 0, "SSH Port {} not available".format(ssh_port)
+        time.sleep(1)
+    return
+
+
 def main():
     logging.getLogger().setLevel(logging.ERROR)
     logging.basicConfig(format="[%(asctime)s]:%(levelname)s: %(message)s")
@@ -211,6 +391,13 @@ def main():
         help="Force ssh pseudo-terminal allocation. This can be used to execute arbitrary "
         "screen-based programs(eg. base, tmux, ...), which can be very useful.",
     )
+    parser.add_argument(
+        "-fc",
+        "--fresh-container",
+        action="store_true",
+        default=False,
+        help="Remove the container if exists and start a new one, useful for image updating",
+    )
     for idx, log_level in enumerate(log_levels):
         arg_name = "v" * (idx + 1)
         parser.add_argument(
@@ -242,15 +429,25 @@ def main():
         exec_via_host(args.command)
         return
     proxy_info = check_proxy_server(args.proxy_server)
+    ssh_host = None
+    ssh_port = None
     if proxy_info["type"] == "host":
         host = "{}:{}".format(proxy_info["host"], proxy_info["port"])
         logging.info("Exec via host {}".format(host))
-        exec_via_ssh(proxy_info["host"], proxy_info["port"], args.command, tty=True)
+        ssh_host = proxy_info["host"]
+        ssh_port = proxy_info["port"]
     elif proxy_info["type"] == "image":
         image = "{}:{}".format(proxy_info["repo"], proxy_info["tag"])
         logging.info("Exec via image: {}".format(image))
+        start_container(
+            image=proxy_info, volume_maps=None, fresh_container=args.fresh_container
+        )
+        container_info = get_container_info(proxy_info)
+        ssh_host = "127.0.0.1"
+        ssh_port = container_info["HostPort"]
     else:
         assert 0, proxy_info
+    exec_via_ssh(ssh_host, ssh_port, args.command, tty=args.tty)
 
 
 if __name__ == "__main__":

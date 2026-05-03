@@ -163,7 +163,7 @@ def set_ssh_public_key(ssh_user, ssh_uid):
 
 def exec_into_sshd():
     sshd_path = get_cmd_path("sshd", path="/usr/sbin:/sbin")
-    print("Launching {} -D".format(sshd_path))
+    print("Launching {} -D".format(sshd_path), flush=True)
     os.execve(sshd_path, [sshd_path, "-D"], os.environ)
 
 
