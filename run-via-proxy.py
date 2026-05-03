@@ -306,17 +306,16 @@ def load_volume_maps(volume_maps, not_found_ok=True):
                 logging.warning(msg)
                 continue
             assert 0, msg
-        result["{}:{}:{}".format(src, dst, mode)] = True
-    return list(result.keys())
+        result[dst] = "{}:{}:{}".format(src, dst, mode)
+    return result
 
 
 def load_volume_file(volume_file, not_found_ok=True):
     if isinstance(volume_file, list):
         result = OrderedDict()
         for cur_file in volume_file:
-            for item in load_volume_file(cur_file, not_found_ok=not_found_ok):
-                result[item] = True
-        return list(result.keys())
+            result.update(load_volume_file(cur_file, not_found_ok=not_found_ok))
+        return result
     volume_maps = load_json_file(volume_file)
     return load_volume_maps(volume_maps, not_found_ok=not_found_ok)
 
@@ -372,11 +371,16 @@ podman run -d \
     #     but can sometimes prevent podman from properly cleaning up
     #     background processes after the container exits
     extra_args = ["--ipc=host"]
-    volume_args = ["-v {}/.ssh:{}/.ssh:rw".format(user_home, user_home)]
+    volume_args = []
     if volume_maps:
-        for v_map in volume_maps:
-            assert isinstance(v_map, str), v_map
-            volume_args.append("-v {}".format(v_map))
+        assert isinstance(volume_maps, dict), volume_maps
+    else:
+        volume_maps = OrderedDict()
+    ssh_dir = "{}/.ssh".format(user_home)
+    volume_maps[ssh_dir] = "{}:{}:rw".format(ssh_dir, ssh_dir)
+    for _, val in volume_maps.items():
+        assert isinstance(val, str), val
+        volume_args.append("-v {}".format(val))
     start_cmd = start_cmd % (
         container_name,
         user_id,
@@ -506,12 +510,9 @@ def main():
         logging.info("Exec via image: {}".format(image))
         volume_maps = OrderedDict()
         if args.volume_file:
-            for v_map in load_volume_file(args.volume_file):
-                volume_maps[v_map] = True
+            volume_maps.update(load_volume_file(args.volume_file))
         if args.volume_maps:
-            for v_map in load_volume_maps(args.volume_maps):
-                volume_maps[v_map] = True
-        volume_maps = list(volume_maps.keys())
+            volume_maps.update(load_volume_maps(args.volume_maps))
         start_container(
             image=proxy_info,
             volume_maps=volume_maps,
