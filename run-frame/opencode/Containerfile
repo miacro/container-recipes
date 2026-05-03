@@ -1,1 +1,7 @@
 FROM ssh-server/debian13
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  --mount=type=cache,target=/tmp,sharing=locked \
+  curl -fSL -C - https://opencode.ai/zh/download/stable/linux-x64-deb -o /tmp/opencode-desktop-linux-amd64.deb \
+  && apt-get install -y /tmp/opencode-desktop-linux-amd64.deb
