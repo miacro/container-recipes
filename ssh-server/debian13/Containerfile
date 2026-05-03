@@ -53,10 +53,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   swig 
 
 RUN sed -i -E \
-  -e 's/# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g\' \
-  -e 's/# *zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/g\' \
+  -e 's/# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g' \
+  -e 's/# *zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/g' \
   /etc/locale.gen && \
-  echo 'LANG="en_US.UTF-8"' > /etc/locale.conf && \
+  echo 'LANG="en_US.UTF-8"' >> /etc/locale.conf && \
   locale-gen
 
 RUN ln -sf bash /bin/sh
