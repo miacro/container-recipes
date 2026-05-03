@@ -505,10 +505,12 @@ def main():
         image = "{}:{}".format(proxy_info["repo"], proxy_info["tag"])
         logging.info("Exec via image: {}".format(image))
         volume_maps = OrderedDict()
-        for v_map in load_volume_file(args.volume_file):
-            volume_maps[v_map] = True
-        for v_map in load_volume_maps(args.volume_maps):
-            volume_maps[v_map] = True
+        if args.volume_file:
+            for v_map in load_volume_file(args.volume_file):
+                volume_maps[v_map] = True
+        if args.volume_maps:
+            for v_map in load_volume_maps(args.volume_maps):
+                volume_maps[v_map] = True
         volume_maps = list(volume_maps.keys())
         start_container(
             image=proxy_info,
