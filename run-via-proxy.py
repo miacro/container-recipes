@@ -158,7 +158,7 @@ def exec_via_host(command):
     return
 
 
-def exec_via_ssh(ssh_host, ssh_port, command, tty=False):
+def exec_via_ssh(ssh_host, ssh_port, command, tty=False, trusted_x11_forwarding=False):
     command = cmd_join(command)
     ssh_user, _, _, ssh_home = get_user_info()
     command = "cd {} 2>/dev/null || cd {} 2>/dev/null || true && {}".format(
@@ -174,7 +174,11 @@ def exec_via_ssh(ssh_host, ssh_port, command, tty=False):
         log_text = "ERROR"
     else:
         log_text = "ERROR"
-    ssh_args = ["-X"]
+    ssh_args = []
+    if trusted_x11_forwarding:
+        ssh_args.append("-Y")
+    else:
+        ssh_args.append("-X")
     if tty:
         ssh_args.append("-t")
     ssh_args += [
@@ -471,6 +475,13 @@ def main():
         default=False,
         help="Remove the container if exists and start a new one, useful for image updating",
     )
+    parser.add_argument(
+        "-txf",
+        "--trusted-x11-forwarding",
+        action="store_true",
+        default=False,
+        help="Enable trusted X11 forwarding",
+    )
     for idx, log_level in enumerate(log_levels):
         arg_name = "v" * (idx + 1)
         parser.add_argument(
@@ -527,7 +538,13 @@ def main():
         ssh_port = container_info["HostPort"]
     else:
         assert 0, proxy_info
-    exec_via_ssh(ssh_host, ssh_port, args.command, tty=args.tty)
+    exec_via_ssh(
+        ssh_host,
+        ssh_port,
+        args.command,
+        tty=args.tty,
+        trusted_x11_forwarding=args.trusted_x11_forwarding,
+    )
 
 
 if __name__ == "__main__":
