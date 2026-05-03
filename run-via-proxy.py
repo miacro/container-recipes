@@ -159,9 +159,11 @@ def exec_via_host(command):
 
 def exec_via_ssh(ssh_host, ssh_port, command, tty=False):
     command = cmd_join(command)
-    command = "cd {} && {}".format(os.getcwd(), command)
-    ssh_path = cmd_get_path("ssh")
     ssh_user, _, _, ssh_home = get_user_info()
+    command = "cd {} 2>/dev/null || cd {} 2>/dev/null || true && {}".format(
+        os.getcwd(), ssh_home, command
+    )
+    ssh_path = cmd_get_path("ssh")
     log_level = logging.getLogger().getEffectiveLevel()
     if log_level <= logging.DEBUG:
         log_text = "DEBUG"
