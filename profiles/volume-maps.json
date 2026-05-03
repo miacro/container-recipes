@@ -1,0 +1,5 @@
+[
+    "/home:/home:rw",
+    "/mnt:/mnt:rw",
+    "/data:/data:rw"
+]

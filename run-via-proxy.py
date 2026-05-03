@@ -11,6 +11,7 @@ import json
 import pwd
 import time
 import re
+from collections import OrderedDict
 
 
 def cmd_run(cmd, cwd=None, capture=False):
@@ -271,6 +272,55 @@ def init_policy_file():
     return
 
 
+def load_volume_maps(volume_maps, not_found_ok=True):
+    assert isinstance(volume_maps, list), volume_maps
+    result = OrderedDict()
+    for item in volume_maps:
+        if isinstance(item, str):
+            cur_map = item.split(":")
+        elif isinstance(item, (list, tuple)):
+            cur_map = item
+        else:
+            assert 0, "Invalid volume map: {}".format(item)
+        if len(cur_map) == 1:
+            src = cur_map[0]
+            dst = cur_map[0]
+            mode = "ro"
+        elif len(cur_map) == 2:
+            src, dst = cur_map
+            mode = "ro"
+        elif len(cur_map) == 3:
+            src, dst, mode = cur_map
+        else:
+            assert 0, "Invalid volume map: {}".format(item)
+        assert isinstance(src, str), item
+        assert isinstance(dst, str), item
+        assert isinstance(mode, str), item
+        if not os.path.isabs(src):
+            assert 0, "Volume map src is not abspath: {}".format(item)
+        if not os.path.isabs(dst):
+            assert 0, "Volume map dst is not abspath: {}".format(item)
+        if not os.path.exists(src):
+            msg = "Volume map src not exists: {}".format(item)
+            if not_found_ok:
+                logging.warning(msg)
+                continue
+            assert 0, msg
+        result["{}:{}:{}".format(src, dst, mode)] = True
+    return list(result.keys())
+
+
+def load_volume_file(volume_file, not_found_ok=True):
+    if isinstance(volume_file, list):
+        result = OrderedDict()
+        for cur_file in volume_file:
+            for item in load_volume_file(cur_file, not_found_ok=not_found_ok):
+                result[item] = True
+        return list(result.keys())
+    volume_maps = load_json_file(volume_file)
+    return load_volume_maps(volume_maps, not_found_ok=not_found_ok)
+
+
 def check_port_alive(port, host="127.0.0.1"):
     if isinstance(port, str):
         port = int(port)
@@ -322,10 +372,11 @@ podman run -d \
     #     but can sometimes prevent podman from properly cleaning up
     #     background processes after the container exits
     extra_args = ["--ipc=host"]
-    volume_args = [
-        "-v {}/.ssh:{}/.ssh:rw".format(user_home, user_home),
-        "-v {}:{}:rw".format(user_home, user_home),
-    ]
+    volume_args = ["-v {}/.ssh:{}/.ssh:rw".format(user_home, user_home)]
+    if volume_maps:
+        for v_map in volume_maps:
+            assert isinstance(v_map, str), v_map
+            volume_args.append("-v {}".format(v_map))
     start_cmd = start_cmd % (
         container_name,
         user_id,
@@ -376,6 +427,18 @@ def main():
         help="The host or image of the ssh proxy server(<host>[:port] or <image>), "
         "available images: [{}]".format(", ".join(run_names)),
         default=None,
+    )
+    parser.add_argument(
+        "-vm",
+        "--volume-maps",
+        help="The volume maps from host to container([src:]dst[:mode])",
+        action="append",
+    )
+    parser.add_argument(
+        "-vf",
+        "--volume-file",
+        help="The file contains multiple volume maps, in json list",
+        action="append",
     )
     log_levels = ["ERROR", "WARNING", "INFO", "DEBUG"]
     parser.add_argument(
@@ -441,8 +504,16 @@ def main():
     elif proxy_info["type"] == "image":
         image = "{}:{}".format(proxy_info["repo"], proxy_info["tag"])
         logging.info("Exec via image: {}".format(image))
+        volume_maps = OrderedDict()
+        for v_map in load_volume_file(args.volume_file):
+            volume_maps[v_map] = True
+        for v_map in load_volume_maps(args.volume_maps):
+            volume_maps[v_map] = True
+        volume_maps = list(volume_maps.keys())
         start_container(
-            image=proxy_info, volume_maps=None, fresh_container=args.fresh_container
+            image=proxy_info,
+            volume_maps=volume_maps,
+            fresh_container=args.fresh_container,
         )
         container_info = get_container_info(proxy_info)
         ssh_host = "127.0.0.1"
