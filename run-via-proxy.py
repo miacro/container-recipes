@@ -338,7 +338,7 @@ def check_port_alive(port, host="127.0.0.1"):
         return stream.connect_ex((host, port)) == 0
 
 
-def start_container(image, volume_maps=None, fresh_container=False):
+def start_container(image, volume_maps=None, port_maps=None, fresh_container=False):
     container_name = get_container_name(image)
     check_cmd = 'podman ps --no-trunc -q -f name="^{}$"'.format(container_name)
     container_id = cmd_run_podman(check_cmd, capture=True)
@@ -364,6 +364,7 @@ def start_container(image, volume_maps=None, fresh_container=False):
 podman run -d \
 --name %s \
 -p 22 \
+%s \
 --userns=keep-id \
 --group-add=keep-groups \
 --network=slirp4netns \
@@ -386,6 +387,9 @@ podman run -d \
         assert isinstance(volume_maps, dict), volume_maps
     else:
         volume_maps = OrderedDict()
+    port_args = []
+    if port_maps:
+        port_args = ["-p {}".format(_) for _ in port_maps]
     ssh_dir = "{}/.ssh".format(user_home)
     volume_maps[ssh_dir] = "{}:{}:rw".format(ssh_dir, ssh_dir)
     for _, val in volume_maps.items():
@@ -393,6 +397,7 @@ podman run -d \
         volume_args.append("-v {}".format(val))
     start_cmd = start_cmd % (
         container_name,
+        " ".join(port_args),
         user_id,
         user_name,
         user_shell,
@@ -471,6 +476,12 @@ def main():
         "screen-based programs(eg. base, tmux, ...), which can be very useful.",
     )
     parser.add_argument(
+        "-pm",
+        "--port-maps",
+        action="append",
+        help="The Container port maps",
+    )
+    parser.add_argument(
         "-fc",
         "--fresh-container",
         action="store_true",
@@ -533,6 +544,7 @@ def main():
         start_container(
             image=proxy_info,
             volume_maps=volume_maps,
+            port_maps=args.port_maps,
             fresh_container=args.fresh_container,
         )
         container_info = get_container_info(proxy_info)
