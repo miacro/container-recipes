@@ -291,7 +291,7 @@ def load_volume_maps(volume_maps, not_found_ok=True):
             dst = cur_map[0]
             mode = "ro"
         elif len(cur_map) == 2:
-            if cur_map[1].startswith(os.path.sep):
+            if cur_map[1].startswith(os.path.sep) or cur_map[1].startswith("~"):
                 src, dst = cur_map
                 mode = "ro"
             else:
@@ -304,6 +304,8 @@ def load_volume_maps(volume_maps, not_found_ok=True):
         assert isinstance(src, str), item
         assert isinstance(dst, str), item
         assert isinstance(mode, str), item
+        src = os.path.expanduser(src)
+        dst = os.path.expanduser(dst)
         if not os.path.isabs(src):
             assert 0, "Volume map src is not abspath: {}".format(item)
         if not os.path.isabs(dst):
