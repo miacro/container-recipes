@@ -287,8 +287,12 @@ def load_volume_maps(volume_maps, not_found_ok=True):
             dst = cur_map[0]
             mode = "ro"
         elif len(cur_map) == 2:
-            src, dst = cur_map
-            mode = "ro"
+            if cur_map[1].startswith(os.path.sep):
+                src, dst = cur_map
+                mode = "ro"
+            else:
+                dst, mode = cur_map
+                src = dst
         elif len(cur_map) == 3:
             src, dst, mode = cur_map
         else:
