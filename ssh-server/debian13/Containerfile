@@ -50,7 +50,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   apt-get install -y \
   locales \
   rsync \
-  swig 
+  swig \
+  libgmp-dev \
+  libmpfr-dev \
+  m4
 
 RUN sed -i -E \
   -e 's/# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g' \
