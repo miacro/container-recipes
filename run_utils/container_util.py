@@ -167,7 +167,7 @@ def check_container_running(container_name, fresh_container=False) -> bool:
         cmd_run_podman(start_cmd)
         return True
     if container_id:
-        cmd_run_podman("podman rm -f --time=32 {}".format(container_id))
+        cmd_run_podman("podman rm -f --time=30 {}".format(container_id))
     return False
 
 

@@ -1,7 +1,27 @@
 FROM ssh-server/debian13
 
+# opencode-desktop
+ARG DESK_DEB_FILE=/tmp/opencode-desktop-linux-amd64.deb
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
   --mount=type=cache,target=/tmp,sharing=locked \
-  curl -fSL https://opencode.ai/zh/download/stable/linux-x64-deb -o /tmp/opencode-desktop-linux-amd64.deb \
-  && apt-get install -y /tmp/opencode-desktop-linux-amd64.deb
+  curl -fSL https://opencode.ai/zh/download/stable/linux-x64-deb -o ${DESK_DEB_FILE} \
+  && apt-get install -y ${DESK_DEB_FILE}
+
+# opencode-cli
+ARG CLI_INSTALL_BIN=/tmp/opencode-install.sh
+ARG CLI_RUN_DIR=/usr/local/opencode
+ARG CLI_RUN_BIN=${CLI_RUN_DIR}/opencode
+
+RUN --mount=type=cache,target=/tmp,sharing=locked \
+  curl -fSL https://opencode.ai/install -o ${CLI_INSTALL_BIN} \
+  && chmod +x ${CLI_INSTALL_BIN}
+
+RUN --mount=type=cache,target=/tmp,sharing=locked \
+  sed -E -i -e "s|^ *INSTALL_DIR *=[^/]*HOME/.opencode/.*|INSTALL_DIR=${CLI_RUN_DIR}|g" ${CLI_INSTALL_BIN} \
+  && echo "export PATH=${CLI_RUN_DIR}:\${PATH}" >> /etc/profile.d/opencode-cli.sh \
+  && echo "set path = (${CLI_RUN_DIR} \$path)" >> /etc/profile.d/opencode-cli.csh
+
+RUN --mount=type=cache,target=/tmp,sharing=locked \
+  ${CLI_INSTALL_BIN} --no-modify-path \
+  && [ -x ${CLI_RUN_BIN} ]

@@ -179,6 +179,7 @@ def set_ssh_public_key(ssh_user, ssh_uid):
     if not check_file_writable(auth_file):
         msg = "{} is not writable, skip adding pubkey".format(auth_file)
         print(msg, flush=True)
+        return
     auth_lines = []
     if os.path.isfile(auth_file):
         with open(auth_file, "rt") as f:

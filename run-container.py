@@ -146,6 +146,7 @@ def main():
         "command",
         nargs=argparse.REMAINDER,
         help="The command to run via proxy server",
+        action="extend",
     )
     args, _ = parser.parse_known_args()
     args_in_json = None
