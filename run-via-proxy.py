@@ -1,111 +1,19 @@
 #!/usr/bin/env python3
 import argparse
 import os
-import subprocess
-import sys
-import shlex
-import shutil
 import logging
-import socket
-import json
-import pwd
 import time
-import re
 from collections import OrderedDict
+import sys
+
+CUR_DIR = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, CUR_DIR)
+
+from run_utils import base_util, container_util, exec_util
 
 
-def cmd_run(cmd, cwd=None, capture=False):
-    logging.info("Running command: {}".format(cmd))
-    stdout = None
-    if capture:
-        stdout = subprocess.PIPE
-    result = subprocess.run(cmd, shell=True, cwd=cwd, stdout=stdout)
-    if result.returncode != 0:
-        assert 0, "Command {} failed with return code {}".format(cmd, result.returncode)
-    if capture:
-        result = result.stdout.decode("utf-8").strip()
-    return result
-
-
-def cmd_quote(cmd):
-    assert isinstance(cmd, str), "cmd must be a string: {}".format(cmd)
-    for label in ("'", '"'):
-        if cmd.startswith(label) and cmd.endswith(label):
-            return cmd
-    return shlex.quote(cmd)
-
-
-def cmd_join(cmd):
-    if isinstance(cmd, list):
-        cmd = " ".join(cmd_quote(_) for _ in cmd)
-    elif not isinstance(cmd, str):
-        assert 0, "cmd must be a string or a list of strings: {}".format(cmd)
-    return cmd
-
-
-def cmd_get_path(cmd, path=None):
-    if path is not None:
-        assert isinstance(path, str), "path must be a string: {}".format(path)
-        pre_path = os.getenv("PATH")
-        if pre_path:
-            path = "{}:{}".format(path, pre_path)
-    cmd_path = shutil.which(cmd, path=path)
-    if not cmd_path:
-        raise FileNotFoundError("Command {} not found".format(cmd))
-    return cmd_path
-
-
-def cmd_run_podman(command, cwd=None, capture=False):
-    env_text = "PODMAN_IGNORE_CGROUPSV1_WARNING=1"
-    cmd = "{} {}".format(env_text, command)
-    return cmd_run(cmd, cwd=cwd, capture=capture)
-
-
-def get_user_info():
-    pwd_user = pwd.getpwuid(os.getuid())
-    user_name = pwd_user.pw_name
-    user_id = pwd_user.pw_uid
-    user_home = pwd_user.pw_dir
-    user_shell = pwd_user.pw_shell
-    return user_name, user_id, user_shell, user_home
-
-
-def remove_line_comments(lines, prefix="#"):
-    assert isinstance(lines, str), lines
-    pattern = re.escape(prefix) + r"[^\n]*\n"
-    return re.sub(pattern, "\n", lines)
-
-
-def load_json_file(filename):
-    with open(filename, "rt") as f:
-        lines = f.read()
-        lines = remove_line_comments(lines, "//")
-        return json.loads(lines)
-
-
-def list_all_images():
-    podman_path = cmd_get_path("podman")
-    if podman_path is None:
-        return []
-    list_cmd = "podman image list --format '{{.ID}} {{.Repository}} {{.Tag}}'"
-    images = cmd_run_podman(list_cmd, capture=True).splitlines()
-    result = []
-    for line in images:
-        image_id, image_repo, image_tag = line.split(" ")
-        result.append({"id": image_id, "repo": image_repo, "tag": image_tag})
-    return result
-
-
-def check_host_exists(hostname):
-    try:
-        socket.gethostbyname(hostname)
-        return True
-    except socket.error:
-        return False
-
-
-def list_run_images(run_prefix):
-    all_images = list_all_images()
+def list_run_images(run_prefix: str):
+    all_images = container_util.list_all_images()
     run_images = []
     for image in all_images:
         image_name = "{}:{}".format(image["repo"], image["tag"])
@@ -123,11 +31,11 @@ def check_proxy_server(proxy_server):
         proxy_body = proxy_server[:index]
     if proxy_body:
         if proxy_tail and proxy_tail.isdigit():
-            if check_host_exists(proxy_body):
+            if base_util.check_host_exists(proxy_body):
                 return {"type": "host", "host": proxy_body, "port": int(proxy_tail)}
-        elif check_host_exists(proxy_body):
+        elif base_util.check_host_exists(proxy_body):
             return {"type": "host", "host": proxy_body, "port": 22}
-    all_images = list_all_images()
+    all_images = container_util.list_all_images()
     matched = []
     for image in all_images:
         image_repo = image["repo"]
@@ -149,280 +57,50 @@ def check_proxy_server(proxy_server):
     return {"type": "image", **matched[0]}
 
 
-def exec_via_host(command):
-    command = cmd_join(command)
-    bash_path = cmd_get_path("bash")
-    bash_args = [bash_path, "-c", command]
-    logging.info("Exec: {}".format(cmd_join(bash_args)))
-    os.execve(bash_path, bash_args, os.environ)
-    return
-
-
-def exec_via_ssh(ssh_host, ssh_port, command, tty=False, trusted_x11_forwarding=False):
-    command = cmd_join(command)
-    ssh_user, _, _, ssh_home = get_user_info()
-    command = "cd {} 2>/dev/null || cd {} 2>/dev/null || true && {}".format(
-        os.getcwd(), ssh_home, command
-    )
-    ssh_path = cmd_get_path("ssh")
-    log_level = logging.getLogger().getEffectiveLevel()
-    if log_level <= logging.DEBUG:
-        log_text = "DEBUG"
-    elif log_level <= logging.INFO:
-        log_text = "INFO"
-    elif log_level <= logging.WARNING:
-        log_text = "ERROR"
-    else:
-        log_text = "ERROR"
-    ssh_args = []
-    if trusted_x11_forwarding:
-        ssh_args.append("-Y")
-    else:
-        ssh_args.append("-X")
-    if tty:
-        ssh_args.append("-t")
-    ssh_args += [
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "UserKnownHostsFile=/dev/null",
-        "-o",
-        "BatchMode=yes",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "ConnectionAttempts=6",
-        "-o",
-        "Compression=yes",
-        "-o",
-        "ServerAliveCountMax=6",
-        "-o",
-        "ServerAliveInterval=300",
-        "-o",
-        "LogLevel={}".format(log_text),
-        "-p",
-        "{}".format(ssh_port),
-        "-i",
-        "{}/.ssh/id_rsa".format(ssh_home),
-        "{}@{}".format(ssh_user, ssh_host),
-    ]
-    ssh_args.insert(0, ssh_path)
-    logging.info("Exec: {} {}".format(cmd_join(ssh_args), command))
-    ssh_args.append(command)
-    ssh_env = {**os.environ, "SSH_AUTH_SOCK": "0"}
-    os.execve(ssh_path, ssh_args, ssh_env)
-    return
-
-
 def get_container_name(image):
+    image_name = None
     if isinstance(image, str):
         image_name = image
     elif isinstance(image, dict):
         image_name = image["repo"]
-    local_prefix = "localhost/"
-    if image_name.startswith(local_prefix):
-        image_name = image_name[len(local_prefix) :]
-    return image_name.replace("/", "-")
+    else:
+        assert 0, image
+    assert isinstance(image_name, str), image
+    return container_util.get_container_name(image_name)
 
 
 def get_container_info(image):
     container_name = get_container_name(image)
-    command = "podman inspect {}".format(container_name)
-    info = cmd_run_podman(command, capture=True)
-    info = json.loads(info)
-    assert info, (image, container_name, info)
-    info = info[0]
-    result = {
-        k: info[k]
-        for k in ["Id", "Path", "Args", "Image", "ImageName", "Name", "State"]
-    }
-    ports = info["NetworkSettings"]["Ports"]
-    host_port = ports["22/tcp"][0]["HostPort"]
-    result["HostPort"] = host_port
-    return result
-
-
-def init_policy_file():
-    policy_file = os.path.join("~", ".config", "containers", "policy.json")
-    policy_file = os.path.expanduser(policy_file)
-    policy_data = {}
-    if os.path.exists(policy_file):
-        policy_data = load_json_file(policy_file)
-        if not isinstance(policy_data, dict):
-            policy_data = {}
-    default_pre = policy_data.get("default", [])
-    if not isinstance(default_pre, list):
-        default_pre = []
-    default_new = []
-    matched = False
-    changed = False
-    for item in default_pre:
-        if not isinstance(item, dict) or "type" not in item:
-            changed = True
-            continue
-        default_new.append(item)
-        if item["type"] == "insecureAcceptAnything":
-            matched = True
-    if not matched:
-        default_new.append({"type": "insecureAcceptAnything"})
-        changed = True
-    if not changed:
-        return
-    policy_data["default"] = default_new
-    if not os.path.exists(os.path.dirname(policy_file)):
-        os.makedirs(os.path.dirname(policy_file))
-    with open(policy_file, "wt") as f:
-        json.dump(policy_data, f)
-    return
-
-
-def load_volume_maps(volume_maps, not_found_ok=True):
-    assert isinstance(volume_maps, list), volume_maps
-    result = OrderedDict()
-    for item in volume_maps:
-        if isinstance(item, str):
-            cur_map = item.split(":")
-        elif isinstance(item, (list, tuple)):
-            cur_map = item
-        else:
-            assert 0, "Invalid volume map: {}".format(item)
-        if len(cur_map) == 1:
-            src = cur_map[0]
-            dst = cur_map[0]
-            mode = "ro"
-        elif len(cur_map) == 2:
-            if cur_map[1].startswith(os.path.sep) or cur_map[1].startswith("~"):
-                src, dst = cur_map
-                mode = "ro"
-            else:
-                dst, mode = cur_map
-                src = dst
-        elif len(cur_map) == 3:
-            src, dst, mode = cur_map
-        else:
-            assert 0, "Invalid volume map: {}".format(item)
-        assert isinstance(src, str), item
-        assert isinstance(dst, str), item
-        assert isinstance(mode, str), item
-        src = os.path.expanduser(src)
-        dst = os.path.expanduser(dst)
-        if not os.path.isabs(src):
-            assert 0, "Volume map src is not abspath: {}".format(item)
-        if not os.path.isabs(dst):
-            assert 0, "Volume map dst is not abspath: {}".format(item)
-        if not os.path.exists(src):
-            msg = "Volume map src not exists: {}".format(item)
-            if not_found_ok:
-                logging.warning(msg)
-                continue
-            assert 0, msg
-        result[dst] = "{}:{}:{}".format(src, dst, mode)
-    return result
-
-
-def load_volume_file(volume_file, not_found_ok=True):
-    if isinstance(volume_file, list):
-        result = OrderedDict()
-        for cur_file in volume_file:
-            result.update(load_volume_file(cur_file, not_found_ok=not_found_ok))
-        return result
-    volume_maps = load_json_file(volume_file)
-    return load_volume_maps(volume_maps, not_found_ok=not_found_ok)
-
-
-def check_port_alive(port, host="127.0.0.1"):
-    if isinstance(port, str):
-        port = int(port)
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as stream:
-        stream.settimeout(1)
-        return stream.connect_ex((host, port)) == 0
+    return container_util.get_container_info(container_name)
 
 
 def start_container(image, volume_maps=None, port_maps=None, fresh_container=False):
     container_name = get_container_name(image)
-    check_cmd = 'podman ps --no-trunc -q -f name="^{}$"'.format(container_name)
-    container_id = cmd_run_podman(check_cmd, capture=True)
-    if container_id and not fresh_container:
-        logging.info("Container {} already running".format(container_name))
-        return
-    if container_id:
-        cmd_run_podman("podman stop --time=30 {}".format(container_id))
-    check_cmd = 'podman ps -a --no-trunc -q -f name="^{}$"'.format(container_name)
-    container_id = cmd_run_podman(check_cmd, capture=True)
-    if container_id and not fresh_container:
-        logging.info("Container {} already exists, starting".format(container_name))
-        start_cmd = "podman start {}".format(container_id)
-        cmd_run_podman(start_cmd)
-        return
-    if container_id:
-        cmd_run_podman("podman rm -f --time=32 {}".format(container_id))
-    logging.info("Container {} not found, creating".format(container_name))
-    image_id = image["id"]
-    user_name, user_id, user_shell, user_home = get_user_info()
-
-    start_cmd = """
-podman run -d \
---name %s \
--p 22 \
-%s \
---userns=keep-id \
---group-add=keep-groups \
---network=slirp4netns \
---replace \
---user=root \
---env SSH_SERVING_UID=%s \
---env SSH_SERVING_USER=%s \
---env SSH_SERVING_SHELL=%s \
-%s \
-%s \
-%s
-"""
-    # ipc=host required by vscode
-    # pid=host required by htop/ps maybe,
-    #     but can sometimes prevent podman from properly cleaning up
-    #     background processes after the container exits
-    extra_args = ["--ipc=host"]
-    volume_args = []
-    if volume_maps:
-        assert isinstance(volume_maps, dict), volume_maps
-    else:
-        volume_maps = OrderedDict()
-    port_args = []
-    if port_maps:
-        port_args = ["-p {}".format(_) for _ in port_maps]
-    ssh_dir = "{}/.ssh".format(user_home)
-    volume_maps[ssh_dir] = "{}:{}:rw".format(ssh_dir, ssh_dir)
-    for _, val in volume_maps.items():
-        assert isinstance(val, str), val
-        volume_args.append("-v {}".format(val))
-    start_cmd = start_cmd % (
-        container_name,
-        " ".join(port_args),
-        user_id,
-        user_name,
-        user_shell,
-        " ".join(extra_args),
-        " ".join(volume_args),
-        image_id,
+    running = container_util.check_container_running(
+        container_name, fresh_container=fresh_container
     )
-    start_cmd = start_cmd.strip()
-    init_policy_file()
-    cmd_run_podman(start_cmd)
-    time.sleep(3)
-    max_seconds = 30
-    for i in range(max_seconds):
-        info = get_container_info(image)
-        state = info.get("State", {})
-        running = state.get("Running", False)
-        if running:
-            break
-        if i == max_seconds - 1:
-            assert 0, "Failed to start {}, State: {}".format(container_name, state)
-        time.sleep(1)
+    if running:
+        return
+    logging.info("Container {} not found, creating".format(container_name))
+    user_home = base_util.get_user_info()["home"]
+    ssh_dir = "{}/.ssh".format(user_home)
+    if not volume_maps:
+        volume_maps = OrderedDict()
+    volume_maps[ssh_dir] = "{}:{}:rw".format(ssh_dir, ssh_dir)
+    start_cmd = container_util.get_container_run_command(
+        image["id"],
+        container_name,
+        volume_maps=volume_maps,
+        port_maps=port_maps,
+        extra_args=[],
+        ipc_host=True,
+    )
+    container_util.start_container(container_name, start_cmd)
     info = get_container_info(image)
     ssh_port = info["HostPort"]
+    max_seconds = 30
     for i in range(max_seconds):
-        if check_port_alive(ssh_port):
+        if base_util.check_port_alive(ssh_port):
             break
         if i == max_seconds - 1:
             assert 0, "SSH Port {} not available".format(ssh_port)
@@ -523,7 +201,7 @@ def main():
 
     if not args.proxy_server:
         logging.info("Exec locally")
-        exec_via_host(args.command)
+        exec_util.exec_via_host(args.command)
         return
     proxy_info = check_proxy_server(args.proxy_server)
     ssh_host = None
@@ -538,9 +216,9 @@ def main():
         logging.info("Exec via image: {}".format(image))
         volume_maps = OrderedDict()
         if args.volume_file:
-            volume_maps.update(load_volume_file(args.volume_file))
+            volume_maps.update(container_util.load_volume_file(args.volume_file))
         if args.volume_maps:
-            volume_maps.update(load_volume_maps(args.volume_maps))
+            volume_maps.update(container_util.load_volume_maps(args.volume_maps))
         start_container(
             image=proxy_info,
             volume_maps=volume_maps,
@@ -552,7 +230,7 @@ def main():
         ssh_port = container_info["HostPort"]
     else:
         assert 0, proxy_info
-    exec_via_ssh(
+    exec_util.exec_via_ssh(
         ssh_host,
         ssh_port,
         args.command,
