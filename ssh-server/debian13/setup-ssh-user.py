@@ -31,6 +31,13 @@ def get_cmd_path(cmd, path=None):
     return cmd_path
 
 
+def check_file_writable(file):
+    if os.access(file, os.W_OK):
+        return True
+    else:
+        return False
+
+
 def get_ssh_login_info(not_found_ok=False):
     ssh_info = {}
     msg = []
@@ -130,27 +137,51 @@ def set_ssh_public_key(ssh_user, ssh_uid):
     home_dir = sys_info[5]
     ssh_gid = sys_info[3]
     ssh_dir = os.path.join(home_dir, ".ssh")
-    private_key = os.path.join(ssh_dir, "id_rsa")
-    public_key = os.path.join(ssh_dir, "id_rsa.pub")
-    if not all(os.path.isfile(key) for key in [private_key, public_key]):
+    private_file = os.path.join(ssh_dir, "id_rsa")
+    public_file = os.path.join(ssh_dir, "id_rsa.pub")
+    gen_key = False
+    msg = None
+    if all(os.path.exists(_) for _ in [private_file, public_file]):
+        msg = "{} and {} already exists, skip ssh-keygen".format(
+            private_file, public_file
+        )
+    elif not check_file_writable(ssh_dir):
+        msg = "{} is not writable, skip ssh-keygen".format(ssh_dir)
+    elif check_file_writable(ssh_dir):
+        gen_key = True
+        for cur_file in [private_file, public_file]:
+            if os.path.exists(cur_file):
+                if not check_file_writable(cur_file):
+                    gen_key = False
+                    msg = "{} is not writable, skip ssh-keygen".format(cur_file)
+                    break
+    if msg:
+        print(msg, flush=True)
+    if gen_key:
         if not os.path.exists(ssh_dir):
             os.makedirs(ssh_dir, mode=0o700)
         os.chmod(ssh_dir, 0o700)
         keygen_path = get_cmd_path("ssh-keygen", path="/usr/bin:/bin")
         comment = "{}@{}(by-ssh-server)".format(ssh_user, os.uname().nodename)
         cmd = "{} -t rsa -b 4096 -C '{}' -f {} -N ''".format(
-            keygen_path, comment, private_key
+            keygen_path, comment, private_file
         )
         run_cmd(cmd)
-        os.chmod(private_key, 0o600)
-        cmd = "{} -R {}:{} {}".format(get_cmd_path("chown"), ssh_uid, ssh_gid, ssh_dir)
+        os.chmod(private_file, 0o600)
+        chown_path = get_cmd_path("chown")
+        cmd = "{} -R {}:{} {}".format(chown_path, ssh_uid, ssh_gid, ssh_dir)
         run_cmd(cmd)
-    with open(public_key, "rt") as f:
+    if not os.path.exists(public_file):
+        return
+    with open(public_file, "rt") as f:
         pub_key = f.read().strip()
-    auth_keys = os.path.join(ssh_dir, "authorized_keys")
+    auth_file = os.path.join(ssh_dir, "authorized_keys")
+    if not check_file_writable(auth_file):
+        msg = "{} is not writable, skip adding pubkey".format(auth_file)
+        print(msg, flush=True)
     auth_lines = []
-    if os.path.isfile(auth_keys):
-        with open(auth_keys, "rt") as f:
+    if os.path.isfile(auth_file):
+        with open(auth_file, "rt") as f:
             auth_lines = f.readlines()
     pub_found = False
     for auth_line in auth_lines:
@@ -161,9 +192,9 @@ def set_ssh_public_key(ssh_user, ssh_uid):
         auth_lines = "".join(auth_lines)
         auth_lines = [auth_lines, pub_key]
         auth_lines = "\n".join(auth_lines)
-        with open(auth_keys, "wt") as f:
+        with open(auth_file, "wt") as f:
             f.writelines(auth_lines)
-    os.chmod(auth_keys, 0o600)
+    os.chmod(auth_file, 0o600)
 
 
 def main():
