@@ -31,7 +31,7 @@ def get_cmd_path(cmd, path=None):
     return cmd_path
 
 
-def get_ssh_login_info():
+def get_ssh_login_info(not_found_ok=False):
     ssh_info = {}
     msg = []
     for ssh_key, env_name in [
@@ -41,7 +41,11 @@ def get_ssh_login_info():
     ]:
         env_value = os.getenv(env_name)
         if not env_value:
-            msg.append("Environment variable {} is not set.".format(env_name))
+            err = "Environment variable {} is not set.".format(env_name)
+            if not_found_ok:
+                print(err, flush=True)
+            else:
+                msg.append(err)
             continue
         if not isinstance(env_value, str):
             msg.append("Environment variable {} must be a string.".format(env_name))
@@ -122,6 +126,7 @@ def set_ssh_public_key(ssh_user, ssh_uid):
     sys_info = get_sys_user_info(ssh_user, ssh_uid)
     if sys_info is None:
         assert 0, "User {} with uid {} not found".format(ssh_user, ssh_uid)
+    assert isinstance(sys_info, list), sys_info
     home_dir = sys_info[5]
     ssh_gid = sys_info[3]
     ssh_dir = os.path.join(home_dir, ".ssh")
@@ -161,17 +166,14 @@ def set_ssh_public_key(ssh_user, ssh_uid):
     os.chmod(auth_keys, 0o600)
 
 
-def exec_into_sshd():
-    sshd_path = get_cmd_path("sshd", path="/usr/sbin:/sbin")
-    print("Launching {} -D".format(sshd_path), flush=True)
-    os.execve(sshd_path, [sshd_path, "-D"], os.environ)
-
-
 def main():
-    ssh_login_info = get_ssh_login_info()
+    ssh_login_info = get_ssh_login_info(not_found_ok=True)
+    for key in ("ssh_uid", "ssh_user", "ssh_shell"):
+        if not ssh_login_info.get(key, None):
+            print("SSH_SERVING user not specified, skip user setup", flush=True)
+            return
     add_ssh_user(ssh_login_info)
     set_ssh_public_key(ssh_login_info["ssh_user"], ssh_login_info["ssh_uid"])
-    exec_into_sshd()
 
 
 if __name__ == "__main__":

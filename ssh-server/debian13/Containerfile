@@ -89,12 +89,12 @@ RUN sed -E -i \
 EXPOSE 22
 # Start sshd in the foreground (-D) to keep the container running
 # CMD ["/usr/sbin/sshd", "-D"]
-COPY ./entrypoint /entrypoint
-COPY ./entrypoint.py /entrypoint.py
+COPY ./setup-ssh-user.py /setup-ssh-user.py
+COPY ./start-ssh-server.py /start-ssh-server.py
 COPY ./entrypoint.sh /entrypoint.sh
 ENV SSH_SERVING_UID=
 ENV SSH_SERVING_USER=
 ENV SSH_SERVING_SHELL=
 # COPY ./ssh-login-hook.sh /ssh-login-hook.sh
 # RUN echo "session optional pam_exec.so seteuid /ssh-login-hook.sh" >> /etc/pam.d/sshd
-CMD [ "/entrypoint.py" ]
+ENTRYPOINT [ "/entrypoint.sh" ]

@@ -3,4 +3,5 @@ set -e
 
 . /etc/profile
 
-exec /usr/bin/env python3 /entrypoint.py
+/usr/bin/env python3 /setup-ssh-user.py
+exec /usr/bin/env python3 /start-ssh-server.py $*
