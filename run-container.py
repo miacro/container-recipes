@@ -97,6 +97,8 @@ def main():
         volume_maps.update(container_util.load_volume_file(args.volume_file))
     if args.volume_maps:
         volume_maps.update(container_util.load_volume_maps(args.volume_maps))
+    if not args.image_name:
+        assert 0, "Unspecified image_name"
     start_container(
         image_name=args.image_name,
         container_name=args.container_name,

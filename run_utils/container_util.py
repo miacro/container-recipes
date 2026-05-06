@@ -8,6 +8,7 @@ import time
 import platform
 import pprint
 import argparse
+import shlex
 
 
 def cmd_run_podman(
@@ -255,6 +256,7 @@ podman run %s \
     start_cmd = start_cmd.strip()
     if command:
         command = base_util.cmd_join(command)
+        command = base_util.cmd_join([command])  # quote the command
         start_cmd = "{} {}".format(start_cmd, command)
     return start_cmd
 
@@ -363,9 +365,24 @@ def parse_container_args(parser):
         if not arg_json or not isinstance(arg_json, dict):
             continue
         for key, cur_val in arg_json.items():
-            if key in ("command", "volume_maps", "volume_file", "port_maps"):
+            if key == "command":
+                if isinstance(cur_val, str):
+                    cur_val = shlex.split(cur_val)
+                assert isinstance(cur_val, list), (key, cur_val)
+                if not cur_val:
+                    continue
+                assert all(isinstance(_, str) for _ in cur_val), (key, cur_val)
+                pre_val = getattr(args, key, None)
+                if pre_val:
+                    if pre_val[-1].rstrip().endswith(";"):
+                        cur_val = [*pre_val, *cur_val]
+                    else:
+                        cur_val = [*pre_val, "&&", *cur_val]
+            elif key in ("volume_maps", "volume_file", "port_maps"):
                 if isinstance(cur_val, str):
                     cur_val = [cur_val]
+                if not cur_val:
+                    continue
                 assert isinstance(cur_val, list), (key, cur_val)
                 assert all(isinstance(_, str) for _ in cur_val), (key, cur_val)
                 pre_val = getattr(args, key, None)
