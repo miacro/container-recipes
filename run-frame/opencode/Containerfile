@@ -5,8 +5,10 @@ ARG DESK_DEB_FILE=/tmp/opencode-desktop-linux-amd64.deb
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
   --mount=type=cache,target=/tmp,sharing=locked \
-  curl -fSL https://opencode.ai/zh/download/stable/linux-x64-deb -o ${DESK_DEB_FILE} \
-  && apt-get install -y ${DESK_DEB_FILE}
+  [ "${TARGETARCH}" == "amd64" ] \
+  && curl -fSL https://opencode.ai/zh/download/stable/linux-x64-deb -o ${DESK_DEB_FILE} \
+  && apt-get install -y ${DESK_DEB_FILE} \
+  || true
 
 # opencode-cli
 ARG CLI_INSTALL_BIN=/tmp/opencode-install.sh
