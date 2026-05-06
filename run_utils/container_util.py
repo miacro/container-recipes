@@ -5,6 +5,7 @@ import os
 import logging
 from collections import OrderedDict
 import time
+import platform
 
 
 def cmd_run_podman(
@@ -190,7 +191,6 @@ podman run %s \
 -p 22 \
 %s \
 --userns=keep-id \
---group-add=keep-groups \
 --network=slirp4netns \
 --replace \
 --user=root \
@@ -211,6 +211,10 @@ podman run %s \
         extra_args = [*extra_args]
     if ipc_host:
         extra_args += ["--ipc=host"]
+
+    os_name = platform.system()
+    if os_name == "Linux":
+        extra_args += ["---group-add=keep-groups"]
 
     ia_args = []
     if not interactive:
