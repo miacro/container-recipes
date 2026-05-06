@@ -159,7 +159,7 @@ def main():
     args = argparse.Namespace()
     if args_in_json and isinstance(args_in_json, dict):
         for key, val in args_in_json.items():
-            if key == "command":
+            if key in ("command", "volume_maps", "volume_file"):
                 if isinstance(val, str):
                     val = [val]
                 assert isinstance(val, list), (key, val)

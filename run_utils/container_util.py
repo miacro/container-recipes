@@ -148,6 +148,7 @@ def load_volume_file(
         for cur_file in volume_file:
             result.update(load_volume_file(cur_file, not_found_ok=not_found_ok))
         return result
+    volume_file = os.path.expandvars(os.path.expanduser(volume_file))
     volume_maps = base_util.load_json_file(volume_file)
     assert isinstance(volume_maps, list), (volume_file, volume_maps)
     return load_volume_maps(volume_maps, not_found_ok=not_found_ok)
