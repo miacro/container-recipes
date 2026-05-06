@@ -40,7 +40,11 @@ def start_container(
         extra_args=extra_args,
         command=command,
     )
-    container_util.start_container(container_name, start_cmd)
+    container_util.start_container(
+        container_name,
+        start_cmd,
+        interactive=interactive,
+    )
     return
 
 

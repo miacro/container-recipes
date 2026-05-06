@@ -4,10 +4,11 @@ import sys
 import re
 import shutil
 import subprocess
+import logging
 
 
 def run_cmd(cmd, cwd=None, capture=False):
-    print("Running command: {}".format(cmd))
+    logging.info("Running command: {}".format(cmd))
     stdout = None
     if capture:
         stdout = subprocess.PIPE
@@ -50,7 +51,7 @@ def get_ssh_login_info(not_found_ok=False):
         if not env_value:
             err = "Environment variable {} is not set.".format(env_name)
             if not_found_ok:
-                print(err, flush=True)
+                logging.info(err)
             else:
                 msg.append(err)
             continue
@@ -82,7 +83,7 @@ def get_ssh_login_info(not_found_ok=False):
     return ssh_info
 
 
-def get_sys_user_info(user_name, user_uid):
+def get_sys_user_info(user_name=None, user_uid=None):
     new_name = user_name
     new_uid = user_uid
     with open("/etc/passwd", "rt") as f:
@@ -96,16 +97,32 @@ def get_sys_user_info(user_name, user_uid):
             cur_name = items[0]
             cur_uid = items[2]
             matched = None
-            if cur_name == new_name:
-                matched = cur_uid == new_uid
-            elif cur_uid == new_uid:
-                matched = cur_name == new_name
+            if new_name is not None and new_uid is not None:
+                if cur_name == new_name:
+                    matched = cur_uid == new_uid
+                elif cur_uid == new_uid:
+                    matched = cur_name == new_name
+            elif new_name is not None:
+                if cur_name == new_name:
+                    matched = True
+            elif new_uid is not None:
+                if cur_uid == new_uid:
+                    matched = True
+            else:
+                assert 0, (user_name, user_uid)
             if matched is False:
                 assert 0, "User mis-matched: new:{}, cur: {}".format(
                     (new_name, new_uid), (cur_name, cur_uid)
                 )
             elif matched is True:
-                return items
+                return {
+                    "name": items[0],
+                    "uid": items[2],
+                    "gid": items[3],
+                    "gecos": items[4],
+                    "home": items[5],
+                    "shell": items[6],
+                }
     return None
 
 
@@ -113,16 +130,37 @@ def add_ssh_user(ssh_info):
     new_uid = ssh_info["ssh_uid"]
     new_name = ssh_info["ssh_user"]
     new_shell = ssh_info["ssh_shell"]
+    new_home = "/home/{}".format(new_name)
     cmd, args = None, None
-    sys_user = get_sys_user_info(new_name, new_uid)
-    if sys_user is None:
-        cmd = "useradd"
-        args = "-m -s {} -u {} {}".format(new_shell, new_uid, new_name)
+    sys_user = get_sys_user_info(user_name=new_name)
+    sys_user_by_uid = get_sys_user_info(user_uid=new_uid)
+    if sys_user_by_uid is not None and sys_user_by_uid["name"] != new_name:
+        other_name = sys_user_by_uid["name"]
+        msg = "Another user {} owns the uid {}, deleting".format(other_name, new_uid)
+        logging.warning(msg)
+        cmd_path = get_cmd_path("userdel", path="/usr/sbin:/sbin")
+        run_cmd("{} -f {}".format(cmd_path, other_name))
+        sys_user_by_uid = None
+
+    if sys_user is not None:
+        matched = True
+        for val0, val1 in [
+            (new_name, sys_user["name"]),
+            (new_uid, sys_user["uid"]),
+            (new_home, sys_user["home"]),
+            (new_shell, sys_user["shell"]),
+        ]:
+            if val0 != val1:
+                matched = True
+                break
+        if not matched:
+            cmd = "usermod"
+            args = "-d {} -u {} -s {} {}".format(new_home, new_uid, new_shell, new_name)
     else:
-        sys_shell = sys_user[6]
-        if sys_shell != new_shell:
-            cmd = "chsh"
-            args = "-s {} {}".format(new_shell, new_name)
+        assert sys_user_by_uid is None
+        cmd = "useradd"
+        args = "-m -d {} -u {} -s {} {}".format(new_home, new_uid, new_shell, new_name)
+
     if cmd is None:
         return
     cmd_path = get_cmd_path(cmd, path="/usr/sbin:/sbin")
@@ -133,9 +171,9 @@ def set_ssh_public_key(ssh_user, ssh_uid):
     sys_info = get_sys_user_info(ssh_user, ssh_uid)
     if sys_info is None:
         assert 0, "User {} with uid {} not found".format(ssh_user, ssh_uid)
-    assert isinstance(sys_info, list), sys_info
-    home_dir = sys_info[5]
-    ssh_gid = sys_info[3]
+    assert isinstance(sys_info, dict), sys_info
+    home_dir = sys_info["home"]
+    ssh_gid = sys_info["gid"]
     ssh_dir = os.path.join(home_dir, ".ssh")
     private_file = os.path.join(ssh_dir, "id_rsa")
     public_file = os.path.join(ssh_dir, "id_rsa.pub")
@@ -156,7 +194,7 @@ def set_ssh_public_key(ssh_user, ssh_uid):
                     msg = "{} is not writable, skip ssh-keygen".format(cur_file)
                     break
     if msg:
-        print(msg, flush=True)
+        logging.info(msg)
     if gen_key:
         if not os.path.exists(ssh_dir):
             os.makedirs(ssh_dir, mode=0o700)
@@ -178,7 +216,7 @@ def set_ssh_public_key(ssh_user, ssh_uid):
     auth_file = os.path.join(ssh_dir, "authorized_keys")
     if not check_file_writable(auth_file):
         msg = "{} is not writable, skip adding pubkey".format(auth_file)
-        print(msg, flush=True)
+        logging.info(msg)
         return
     auth_lines = []
     if os.path.isfile(auth_file):
@@ -199,10 +237,12 @@ def set_ssh_public_key(ssh_user, ssh_uid):
 
 
 def main():
+    logging.getLogger().setLevel(logging.INFO)
+    logging.basicConfig(format="[%(asctime)s]:%(levelname)s: %(message)s")
     ssh_login_info = get_ssh_login_info(not_found_ok=True)
     for key in ("ssh_uid", "ssh_user", "ssh_shell"):
         if not ssh_login_info.get(key, None):
-            print("SSH_SERVING user not specified, skip user setup", flush=True)
+            logging.warning("SSH_SERVING user not specified, skip user setup")
             return
     add_ssh_user(ssh_login_info)
     set_ssh_public_key(ssh_login_info["ssh_user"], ssh_login_info["ssh_uid"])

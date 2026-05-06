@@ -6,6 +6,7 @@ import logging
 from collections import OrderedDict
 import time
 import platform
+import pprint
 
 
 def cmd_run_podman(
@@ -159,7 +160,7 @@ def check_container_running(container_name, fresh_container=False) -> bool:
         logging.info("Container {} already running".format(container_name))
         return True
     if container_id:
-        cmd_run_podman("podman stop --time=30 {}".format(container_id))
+        cmd_run_podman("podman stop {}".format(container_id))
     check_cmd = 'podman ps -a --no-trunc -q -f name="^{}$"'.format(container_name)
     container_id = cmd_run_podman(check_cmd, capture=True)
     if container_id and not fresh_container:
@@ -168,7 +169,7 @@ def check_container_running(container_name, fresh_container=False) -> bool:
         cmd_run_podman(start_cmd)
         return True
     if container_id:
-        cmd_run_podman("podman rm -f --time=30 {}".format(container_id))
+        cmd_run_podman("podman rm -f --time=10 -v {}".format(container_id))
     return False
 
 
@@ -254,9 +255,11 @@ podman run %s \
     return start_cmd
 
 
-def start_container(container_name, command):
+def start_container(container_name, command, interactive=False):
     init_policy_file()
     cmd_run_podman(command)
+    if interactive:
+        return
     time.sleep(3)
     max_seconds = 30
     for i in range(max_seconds):
@@ -265,7 +268,10 @@ def start_container(container_name, command):
         running = state.get("Running", False)
         if running:
             break
-        if i == max_seconds - 1:
-            assert 0, "Failed to start {}, State: {}".format(container_name, state)
+        status = state.get("Status", None)
+        if status == "exited" or (i == max_seconds - 1):
+            assert 0, "Failed to start {}, State:\n{}".format(
+                container_name, pprint.pformat(state)
+            )
         time.sleep(1)
-    pass
+    return
