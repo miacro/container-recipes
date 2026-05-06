@@ -27,17 +27,21 @@ def cmd_run(
     return result
 
 
-def cmd_quote(cmd: str) -> str:
+def cmd_quote(cmd: str, safely=True) -> str:
     assert isinstance(cmd, str), "cmd must be a string: {}".format(cmd)
-    for label in ("'", '"'):
-        if cmd.startswith(label) and cmd.endswith(label):
+    # for label in ("'", '"'):
+    #     if cmd.startswith(label) and cmd.endswith(label):
+    #         return cmd
+    if not safely:
+        blanks = (" ", "\t", "\n")
+        if all(_ not in cmd for _ in blanks):
             return cmd
     return shlex.quote(cmd)
 
 
-def cmd_join(cmd: Union[str, List[str]]) -> str:
-    if isinstance(cmd, list):
-        cmd = " ".join(cmd_quote(_) for _ in cmd)
+def cmd_join(cmd, safely=False) -> str:
+    if isinstance(cmd, (list, tuple)):
+        cmd = " ".join(cmd_quote(_, safely=safely) for _ in cmd)
     elif not isinstance(cmd, str):
         assert 0, "cmd must be a string or a list of strings: {}".format(cmd)
     return cmd

@@ -7,7 +7,7 @@ def exec_via_host(command):
     command = base_util.cmd_join(command)
     bash_path = base_util.cmd_get_path("bash")
     bash_args = [bash_path, "-c", command]
-    logging.info("Exec: {}".format(base_util.cmd_join(bash_args)))
+    logging.info("Exec: {}".format(bash_args))
     os.execve(bash_path, bash_args, os.environ)
     return
 
@@ -63,7 +63,7 @@ def exec_via_ssh(ssh_host, ssh_port, command, tty=False, trusted_x11_forwarding=
         "{}@{}".format(ssh_user, ssh_host),
     ]
     ssh_args.insert(0, ssh_path)
-    logging.info("Exec: {} {}".format(base_util.cmd_join(ssh_args), command))
+    logging.info("Exec: {}".format([*ssh_args, command]))
     ssh_args.append(command)
     ssh_env = {**os.environ, "SSH_AUTH_SOCK": "0"}
     os.execve(ssh_path, ssh_args, ssh_env)

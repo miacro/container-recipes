@@ -10,7 +10,7 @@ import logging
 def cmd_quote(cmd: str, safely=True) -> str:
     assert isinstance(cmd, str), "cmd must be a string: {}".format(cmd)
     # for label in ("'", '"'):
-    # if cmd.startswith(label) and cmd.endswith(label):
+    #     if cmd.startswith(label) and cmd.endswith(label):
     # return cmd
     if not safely:
         for blank in (" ", "\t", "\n"):
@@ -21,7 +21,7 @@ def cmd_quote(cmd: str, safely=True) -> str:
     return shlex.quote(cmd)
 
 
-def cmd_join(cmd, safely=True) -> str:
+def cmd_join(cmd, safely=False) -> str:
     if isinstance(cmd, list):
         cmd = " ".join(cmd_quote(_, safely=safely) for _ in cmd)
     elif not isinstance(cmd, str):
@@ -48,17 +48,16 @@ def exec_into_sshd():
 
 
 def exec_command(command):
-    if isinstance(command, str):
-        command = [command]
+    command = cmd_join(command, safely=False)
     exec_path = "/ssh-server-exec-bash.sh"
-    exec_args = [exec_path, *command]
+    exec_args = [exec_path, "-c", command]
     logging.info("Exec: {}".format(exec_args))
     os.execve(exec_args[0], exec_args, os.environ)
     return
 
 
 def exec_by_user(command, run_user):
-    command = cmd_join(command) # not expand vars
+    command = cmd_join(command, safely=True)  # not expand vars
     exec_path = "/ssh-server-exec-su.sh"
     exec_path = cmd_get_path("su")
     exec_args = [exec_path, run_user, command]
