@@ -126,78 +126,18 @@ def main():
         default=None,
     )
     parser.add_argument(
-        "-vm",
-        "--volume-maps",
-        help="The volume maps from host to container([src:]dst[:mode])",
-        action="append",
-    )
-    parser.add_argument(
-        "-vf",
-        "--volume-file",
-        help="The file contains multiple volume maps, in json list",
-        action="append",
-    )
-    log_levels = ["ERROR", "WARNING", "INFO", "DEBUG"]
-    parser.add_argument(
-        "-l",
-        "--log-level",
-        default="ERROR",
-        choices=log_levels,
-        help="Set the log level",
-    )
-    parser.add_argument(
-        "-t",
-        "--tty",
-        action="store_true",
-        default=False,
-        help="Force ssh pseudo-terminal allocation. This can be used to execute arbitrary "
-        "screen-based programs(eg. base, tmux, ...), which can be very useful.",
-    )
-    parser.add_argument(
-        "-pm",
-        "--port-maps",
-        action="append",
-        help="The Container port maps",
-    )
-    parser.add_argument(
-        "-fc",
-        "--fresh-container",
-        action="store_true",
-        default=False,
-        help="Remove the container if exists and start a new one, useful for image updating",
-    )
-    parser.add_argument(
         "-txf",
         "--trusted-x11-forwarding",
         action="store_true",
         default=False,
         help="Enable trusted X11 forwarding",
     )
-    for idx, log_level in enumerate(log_levels):
-        arg_name = "v" * (idx + 1)
-        parser.add_argument(
-            "-" + arg_name,
-            help="Set log level to {}".format(log_level),
-            action="store_true",
-            default=False,
-        )
-    parser.add_argument(
-        "command",
-        nargs=argparse.REMAINDER,
-        help="The command to run via proxy server",
-    )
-    args = parser.parse_args()
+    container_util.init_container_arg_parser(parser)
+    args = container_util.parse_container_args(parser)
     if not args.command:
         assert 0, "No command to run via proxy server"
 
-    log_level = getattr(logging, args.log_level)
-    for idx, cur_level in enumerate(log_levels):
-        arg_name = "v" * (idx + 1)
-        arg_value = getattr(args, arg_name)
-        if arg_value:
-            cur_level = getattr(logging, cur_level)
-            log_level = min(log_level, cur_level)
-    logging.getLogger().setLevel(log_level)
+    logging.getLogger().setLevel(getattr(logging, args.log_level))
 
     if not args.proxy_server:
         logging.info("Exec locally")

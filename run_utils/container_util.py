@@ -7,6 +7,7 @@ from collections import OrderedDict
 import time
 import platform
 import pprint
+import argparse
 
 
 def cmd_run_podman(
@@ -26,6 +27,8 @@ def list_all_images() -> List[Dict[str, Any]]:
     result: List[Dict[str, Any]] = []
     for line in images:
         image_id, image_repo, image_tag = line.split(" ")
+        if image_repo == "<none>":
+            continue
         result.append({"id": image_id, "repo": image_repo, "tag": image_tag})
     return result
 
@@ -276,3 +279,109 @@ def start_container(container_name, command, interactive=False):
             )
         time.sleep(1)
     return
+
+
+def init_container_arg_parser(parser):
+    log_levels = ["ERROR", "WARNING", "INFO", "DEBUG"]
+    parser.add_argument(
+        "-vm",
+        "--volume-maps",
+        help="The volume maps from host to container([src:]dst[:mode])",
+        action="append",
+        default=[],
+    )
+    parser.add_argument(
+        "-vf",
+        "--volume-file",
+        help="The file contains multiple volume maps, in json list",
+        action="append",
+        default=[],
+    )
+    parser.add_argument(
+        "-pm",
+        "--port-maps",
+        action="append",
+        help="The Container port maps",
+        default=[],
+    )
+
+    parser.add_argument(
+        "-l",
+        "--log-level",
+        default="ERROR",
+        choices=log_levels,
+        help="Set the log level",
+    )
+    parser.add_argument(
+        "-t",
+        "--tty",
+        action="store_true",
+        default=False,
+        help="Force ssh pseudo-terminal allocation. This can be used to execute arbitrary "
+        "screen-based programs(eg. base, tmux, ...), which can be very useful.",
+    )
+    parser.add_argument(
+        "-af",
+        "--arg-file",
+        help="The file contains args in json",
+        default=[],
+        action="append",
+    )
+
+    parser.add_argument(
+        "-fc",
+        "--fresh-container",
+        action="store_true",
+        default=False,
+        help="Remove the container if exists and start a new one, useful for image updating",
+    )
+    for idx, log_level in enumerate(log_levels):
+        arg_name = "v" * (idx + 1)
+        parser.add_argument(
+            "-" + arg_name,
+            help="Set log level to {}".format(log_level),
+            action="store_true",
+            default=False,
+        )
+    parser.add_argument(
+        "command",
+        nargs=argparse.REMAINDER,
+        help="The command to run",
+        action="extend",
+    )
+
+
+def parse_container_args(parser):
+    args, _ = parser.parse_known_args()
+    arg_files = args.arg_file
+    args = argparse.Namespace()
+    if not arg_files:
+        arg_files = []
+    for arg_file in arg_files:
+        arg_file = os.path.expandvars(os.path.expanduser(arg_file))
+        arg_json = base_util.load_json_file(arg_file)
+        if not arg_json or not isinstance(arg_json, dict):
+            continue
+        for key, cur_val in arg_json.items():
+            if key in ("command", "volume_maps", "volume_file", "port_maps"):
+                if isinstance(cur_val, str):
+                    cur_val = [cur_val]
+                assert isinstance(cur_val, list), (key, cur_val)
+                assert all(isinstance(_, str) for _ in cur_val), (key, cur_val)
+                pre_val = getattr(args, key, None)
+                if pre_val:
+                    cur_val = [*pre_val, *cur_val]
+            setattr(args, key, cur_val)
+    args = parser.parse_args(namespace=args)
+
+    log_level = getattr(logging, args.log_level)
+    log_levels = ["ERROR", "WARNING", "INFO", "DEBUG"]
+    for idx, cur_level in enumerate(log_levels):
+        arg_name = "v" * (idx + 1)
+        arg_value = getattr(args, arg_name)
+        if arg_value:
+            cur_level = getattr(logging, cur_level)
+            log_level = min(log_level, cur_level)
+    assert isinstance(log_level, int)
+    args.log_level = logging.getLevelName(log_level)
+    return args

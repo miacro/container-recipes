@@ -77,47 +77,10 @@ def main():
         default=None,
     )
     parser.add_argument(
-        "-vm",
-        "--volume-maps",
-        help="The volume maps from host to container([src:]dst[:mode])",
-        action="append",
-        default=[],
-    )
-    parser.add_argument(
-        "-vf",
-        "--volume-file",
-        help="The file contains multiple volume maps, in json list",
-        action="append",
-        default=[],
-    )
-    log_levels = ["ERROR", "WARNING", "INFO", "DEBUG"]
-    parser.add_argument(
-        "-l",
-        "--log-level",
-        default="ERROR",
-        choices=log_levels,
-        help="Set the log level",
-    )
-    parser.add_argument(
-        "-t",
-        "--tty",
-        action="store_true",
-        default=False,
-        help="Force ssh pseudo-terminal allocation. This can be used to execute arbitrary "
-        "screen-based programs(eg. base, tmux, ...), which can be very useful.",
-    )
-    parser.add_argument(
         "-i",
         "--interactive",
         default=False,
         help="When set to true, make stdin available to the contained process.",
-    )
-    parser.add_argument(
-        "-pm",
-        "--port-maps",
-        action="append",
-        help="The Container port maps",
-        default=[],
     )
     parser.add_argument(
         "-ca",
@@ -125,56 +88,9 @@ def main():
         help="Extra container args",
         default=None,
     )
-    parser.add_argument(
-        "-fc",
-        "--fresh-container",
-        action="store_true",
-        default=False,
-        help="Remove the container if exists and start a new one, useful for image updating",
-    )
-    parser.add_argument(
-        "-af",
-        "--arg-file",
-        help="The file contains args in json",
-        default=None,
-    )
-    for idx, log_level in enumerate(log_levels):
-        arg_name = "v" * (idx + 1)
-        parser.add_argument(
-            "-" + arg_name,
-            help="Set log level to {}".format(log_level),
-            action="store_true",
-            default=False,
-        )
-    parser.add_argument(
-        "command",
-        nargs=argparse.REMAINDER,
-        help="The command to run via proxy server",
-        action="extend",
-    )
-    args, _ = parser.parse_known_args()
-    args_in_json = None
-    if args.arg_file:
-        args_in_json = base_util.load_json_file(args.arg_file)
-    args = argparse.Namespace()
-    if args_in_json and isinstance(args_in_json, dict):
-        for key, val in args_in_json.items():
-            if key in ("command", "volume_maps", "volume_file"):
-                if isinstance(val, str):
-                    val = [val]
-                assert isinstance(val, list), (key, val)
-                assert all(isinstance(_, str) for _ in val), (key, val)
-            setattr(args, key, val)
-    args = parser.parse_args(namespace=args)
-
-    log_level = getattr(logging, args.log_level)
-    for idx, cur_level in enumerate(log_levels):
-        arg_name = "v" * (idx + 1)
-        arg_value = getattr(args, arg_name)
-        if arg_value:
-            cur_level = getattr(logging, cur_level)
-            log_level = min(log_level, cur_level)
-    logging.getLogger().setLevel(log_level)
+    container_util.init_container_arg_parser(parser)
+    args = container_util.parse_container_args(parser)
+    logging.getLogger().setLevel(getattr(logging, args.log_level))
 
     volume_maps = OrderedDict()
     if args.volume_file:
