@@ -216,7 +216,7 @@ podman run %s \
 
     os_name = platform.system()
     if os_name == "Linux":
-        extra_args += ["---group-add=keep-groups"]
+        extra_args += ["--group-add=keep-groups"]
 
     ia_args = []
     if not interactive:
