@@ -50,7 +50,7 @@ def exec_into_sshd():
 def exec_command(command):
     command = cmd_join(command, safely=False)
     exec_path = "/ssh-server-exec-bash.sh"
-    exec_args = [exec_path, "-c", command]
+    exec_args = [exec_path, command]
     logging.info("Exec: {}".format(exec_args))
     os.execve(exec_args[0], exec_args, os.environ)
     return
