@@ -159,6 +159,11 @@ def main():
     args = argparse.Namespace()
     if args_in_json and isinstance(args_in_json, dict):
         for key, val in args_in_json.items():
+            if key == "command":
+                if isinstance(val, str):
+                    val = [val]
+                assert isinstance(val, list), (key, val)
+                assert all(isinstance(_, str) for _ in val), (key, val)
             setattr(args, key, val)
     args = parser.parse_args(namespace=args)
 

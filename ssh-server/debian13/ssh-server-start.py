@@ -4,19 +4,26 @@ import sys
 import shlex
 import argparse
 import pwd
+import logging
 
 
-def cmd_quote(cmd: str) -> str:
+def cmd_quote(cmd: str, safely=True) -> str:
     assert isinstance(cmd, str), "cmd must be a string: {}".format(cmd)
-    for label in ("'", '"'):
-        if cmd.startswith(label) and cmd.endswith(label):
+    # for label in ("'", '"'):
+    # if cmd.startswith(label) and cmd.endswith(label):
+    # return cmd
+    if not safely:
+        for blank in (" ", "\t", "\n"):
+            if blank in cmd:
+                break
+        else:
             return cmd
     return shlex.quote(cmd)
 
 
-def cmd_join(cmd) -> str:
+def cmd_join(cmd, safely=True) -> str:
     if isinstance(cmd, list):
-        cmd = " ".join(cmd_quote(_) for _ in cmd)
+        cmd = " ".join(cmd_quote(_, safely=safely) for _ in cmd)
     elif not isinstance(cmd, str):
         assert 0, "cmd must be a string or a list of strings: {}".format(cmd)
     return cmd
@@ -36,29 +43,34 @@ def cmd_get_path(cmd, path=None):
 
 def exec_into_sshd():
     sshd_path = cmd_get_path("sshd", path="/usr/sbin:/sbin")
-    print("Exec {} -D".format(sshd_path), flush=True)
+    logging.info("Exec {} -D".format(sshd_path))
     os.execve(sshd_path, [sshd_path, "-D"], os.environ)
 
 
 def exec_command(command):
-    command = cmd_join(command)
-    bash_path = cmd_get_path("bash")
-    bash_args = [bash_path, "-c", command]
-    print("Exec: {}".format(cmd_join(bash_args)), flush=True)
-    os.execve(bash_path, bash_args, os.environ)
+    if isinstance(command, str):
+        command = [command]
+    exec_path = "/ssh-server-exec-bash.sh"
+    exec_args = [exec_path, *command]
+    logging.info("Exec: {}".format(exec_args))
+    os.execve(exec_args[0], exec_args, os.environ)
     return
 
 
 def exec_by_user(command, run_user):
-    command = cmd_join(command)
-    su_path = cmd_get_path("su")
-    su_args = [su_path, "-l", run_user, "-c", command]
-    print("Exec: {}".format(cmd_join(su_args)), flush=True)
-    os.execve(su_path, su_args, os.environ)
+    command = cmd_join(command) # not expand vars
+    exec_path = "/ssh-server-exec-su.sh"
+    exec_path = cmd_get_path("su")
+    exec_args = [exec_path, run_user, command]
+    exec_args = [exec_path, "-l", run_user, "-c", command]
+    logging.info("Exec: {}".format(exec_args))
+    os.execve(exec_args[0], exec_args, os.environ)
     return
 
 
 def main():
+    logging.getLogger().setLevel(logging.INFO)
+    logging.basicConfig(format="[%(asctime)s]:%(levelname)s: %(message)s")
     parser = argparse.ArgumentParser(
         description="Run a command or sshd -D",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,

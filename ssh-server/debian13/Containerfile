@@ -89,8 +89,9 @@ RUN sed -E -i \
 EXPOSE 22
 # Start sshd in the foreground (-D) to keep the container running
 # CMD ["/usr/sbin/sshd", "-D"]
-COPY ./setup-ssh-user.py /setup-ssh-user.py
-COPY ./start-ssh-server.py /start-ssh-server.py
+COPY ./ssh-user-setup.py /ssh-user-setup.py
+COPY ./ssh-server-start.py /ssh-server-start.py
+COPY ./ssh-server-exec-bash.sh /ssh-server-exec-bash.sh
 COPY ./entrypoint.sh /entrypoint.sh
 ENV SSH_SERVING_UID=
 ENV SSH_SERVING_USER=
