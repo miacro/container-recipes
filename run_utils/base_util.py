@@ -39,11 +39,23 @@ def cmd_quote(cmd: str, safely=True) -> str:
     return shlex.quote(cmd)
 
 
-def cmd_join(cmd, safely=False) -> str:
+def cmd_join(cmd, quote="auto", safely=False) -> str:
+    assert quote in ("auto", "always"), quote
+    safely = bool(safely)
+    quote_always = quote == "always"
+    if isinstance(cmd, str):
+        if quote_always:
+            cmd = [cmd]
+    elif isinstance(cmd, (list, tuple)):
+        assert all(isinstance(_, str) for _ in cmd), cmd
+        cmd = list(cmd)
+        if len(cmd) == 1 and not quote_always:
+            cmd = cmd[0]
+    else:
+        assert 0, cmd
+
     if isinstance(cmd, (list, tuple)):
         cmd = " ".join(cmd_quote(_, safely=safely) for _ in cmd)
-    elif not isinstance(cmd, str):
-        assert 0, "cmd must be a string or a list of strings: {}".format(cmd)
     return cmd
 
 

@@ -12,7 +12,7 @@ sys.path.insert(0, CUR_DIR)
 from run_utils import base_util, container_util, exec_util
 
 
-def start_container(
+def run_container(
     image_name,
     container_name=None,
     volume_maps=None,
@@ -21,6 +21,7 @@ def start_container(
     tty=False,
     interactive=False,
     extra_args=None,
+    run_user=None,
     command=None,
 ):
     container_name = container_util.get_container_name(image_name, container_name)
@@ -30,6 +31,8 @@ def start_container(
     if running:
         return
     logging.info("Container {} not found, creating".format(container_name))
+    if not run_user:
+        run_user = base_util.get_user_info()["name"]
     start_cmd = container_util.get_container_run_command(
         image_name,
         container_name,
@@ -38,6 +41,7 @@ def start_container(
         tty=tty,
         interactive=interactive,
         extra_args=extra_args,
+        run_user=run_user,
         command=command,
     )
     container_util.start_container(
@@ -88,6 +92,9 @@ def main():
         help="Extra container args",
         default=None,
     )
+    parser.add_argument(
+        "-ru", "--run-user", help="The user to run the command", default=None
+    )
     container_util.init_container_arg_parser(parser)
     args = container_util.parse_container_args(parser)
     logging.getLogger().setLevel(getattr(logging, args.log_level))
@@ -99,7 +106,7 @@ def main():
         volume_maps.update(container_util.load_volume_maps(args.volume_maps))
     if not args.image_name:
         assert 0, "Unspecified image_name"
-    start_container(
+    run_container(
         image_name=args.image_name,
         container_name=args.container_name,
         volume_maps=volume_maps,
@@ -109,6 +116,7 @@ def main():
         interactive=args.interactive,
         command=args.command,
         extra_args=args.container_args,
+        run_user=args.run_user,
     )
 
 

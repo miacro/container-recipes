@@ -188,6 +188,7 @@ def get_container_run_command(
     extra_args=None,
     command=None,
     ipc_host=False,
+    run_user=None,
 ) -> str:
     container_name = get_container_name(image_name, container_name)
     user_info = base_util.get_user_info()
@@ -254,9 +255,13 @@ podman run %s \
         image_name,
     )
     start_cmd = start_cmd.strip()
+    if not run_user:
+        run_user = "root"
+    if run_user != "root":
+        start_cmd = "{} --run-user={}".format(start_cmd, run_user)
     if command:
-        command = base_util.cmd_join(command)
-        command = base_util.cmd_join([command])  # quote the command
+        command = base_util.cmd_join(command)  # join to string
+        command = base_util.cmd_join(command, quote="always")  # quote
         start_cmd = "{} {}".format(start_cmd, command)
     return start_cmd
 
@@ -353,6 +358,28 @@ def init_container_arg_parser(parser):
     )
 
 
+def append_command(commands, command):
+    assert isinstance(commands, list), commands
+    assert all(isinstance(_, str) for _ in commands), commands
+    assert isinstance(command, list), command
+    assert all(isinstance(_, str) for _ in command), command
+    if not commands:
+        return [*command]
+    if not command:
+        return [*commands]
+    command_pre = commands[-1].rstrip()
+    sep = ";"
+    for label in (";", "&&", "||"):
+        if command_pre.endswith(label):
+            sep = None
+            break
+    result = [*commands]
+    if sep:
+        result.append(sep)
+    result.extend(command)
+    return result
+
+
 def parse_container_args(parser):
     args, _ = parser.parse_known_args()
     arg_files = args.arg_file
@@ -372,12 +399,7 @@ def parse_container_args(parser):
                 if not cur_val:
                     continue
                 assert all(isinstance(_, str) for _ in cur_val), (key, cur_val)
-                pre_val = getattr(args, key, None)
-                if pre_val:
-                    if pre_val[-1].rstrip().endswith(";"):
-                        cur_val = [*pre_val, *cur_val]
-                    else:
-                        cur_val = [*pre_val, "&&", *cur_val]
+                cur_val = append_command(getattr(args, key, []), cur_val)
             elif key in ("volume_maps", "volume_file", "port_maps"):
                 if isinstance(cur_val, str):
                     cur_val = [cur_val]
@@ -385,11 +407,15 @@ def parse_container_args(parser):
                     continue
                 assert isinstance(cur_val, list), (key, cur_val)
                 assert all(isinstance(_, str) for _ in cur_val), (key, cur_val)
-                pre_val = getattr(args, key, None)
-                if pre_val:
-                    cur_val = [*pre_val, *cur_val]
+                cur_val = [*getattr(args, key, []), *cur_val]
             setattr(args, key, cur_val)
+    command_pre = getattr(args, "command", [])
+    args.command = []
     args = parser.parse_args(namespace=args)
+    command_cur = args.command
+    if len(command_cur) == 1:
+        command_cur = shlex.split(command_cur[0])
+    args.command = append_command(command_pre, command_cur)
 
     log_level = getattr(logging, args.log_level)
     log_levels = ["ERROR", "WARNING", "INFO", "DEBUG"]

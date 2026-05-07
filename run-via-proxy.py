@@ -74,7 +74,7 @@ def get_container_info(image):
     return container_util.get_container_info(container_name)
 
 
-def start_container(image, volume_maps=None, port_maps=None, fresh_container=False):
+def run_container(image, volume_maps=None, port_maps=None, fresh_container=False):
     container_name = get_container_name(image)
     running = container_util.check_container_running(
         container_name, fresh_container=fresh_container
@@ -159,7 +159,7 @@ def main():
             volume_maps.update(container_util.load_volume_file(args.volume_file))
         if args.volume_maps:
             volume_maps.update(container_util.load_volume_maps(args.volume_maps))
-        start_container(
+        run_container(
             image=proxy_info,
             volume_maps=volume_maps,
             port_maps=args.port_maps,
