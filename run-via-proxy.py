@@ -9,7 +9,7 @@ import sys
 CUR_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, CUR_DIR)
 
-from run_utils import base_util, container_util, exec_util
+from run_utils import base_util, container_util, exec_util, ssh_util
 
 
 def list_run_images(run_prefix: str):
@@ -98,13 +98,7 @@ def run_container(image, volume_maps=None, port_maps=None, fresh_container=False
     container_util.start_container(container_name, start_cmd)
     info = get_container_info(image)
     ssh_port = info["HostPort"]
-    max_seconds = 30
-    for i in range(max_seconds):
-        if base_util.check_port_alive(ssh_port):
-            break
-        if i == max_seconds - 1:
-            assert 0, "SSH Port {} not available".format(ssh_port)
-        time.sleep(1)
+    ssh_util.ssh_wait_for_ready(host="127.0.0.1", port=ssh_port)
     return
 
 

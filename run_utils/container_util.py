@@ -271,7 +271,6 @@ def start_container(container_name, command, interactive=False):
     cmd_run_podman(command)
     if interactive:
         return
-    time.sleep(3)
     max_seconds = 30
     for i in range(max_seconds):
         info = get_container_info(container_name)
