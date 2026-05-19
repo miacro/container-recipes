@@ -114,3 +114,61 @@ def check_port_alive(port, host="127.0.0.1"):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as stream:
         stream.settimeout(1)
         return stream.connect_ex((host, port)) == 0
+
+
+def cmd_check_compound(command_args, env_path=None):
+    """
+    Analyzes the command arguments to determine if they require a shell interpreter.
+
+    :param command_args: list, the raw command split into arguments.
+    :param env_path: str, the PATH string to use for binary lookup.
+    :return: tuple (bool, str or None), (True, None) if a shell wrapper is required,
+             (False, resolved_absolute_path) if direct binary execution is safe.
+    """
+    raw_binary = command_args[0]
+
+    # 1. Base Shell Operators (Pipes, redirections, compounds, background execution)
+    forbidden_operators = ("&&", "||", ";", "|", ">>", ">", "<", "&", "!")
+    if any(op in command_args for op in forbidden_operators):
+        return True, None
+
+    # 2. Advanced Shell Features (Wildcards, command substitution, variables, escapes)
+    shell_features = ("*", "?", "[", "]", "$", "`", "\\", "\n")
+    if any(any(feat in arg for feat in shell_features) for arg in command_args):
+        return True, None
+
+    # 3. Common Shell Builtin Commands and Keywords
+    shell_builtins = (
+        ".",
+        "source",
+        "if",
+        "for",
+        "while",
+        "until",
+        "case",
+        "exec",
+        "eval",
+        "export",
+        "alias",
+        "read",
+        "set",
+        "unset",
+        "echo",
+    )
+    if raw_binary in shell_builtins:
+        return True, None
+
+    # 4. Binary Path Resolution
+    if raw_binary.startswith((".", "/")):
+        resolved_binary = os.path.abspath(raw_binary)
+    else:
+        if not env_path:
+            env_path = os.getenv("PATH", os.defpath)
+        resolved_binary = shutil.which(raw_binary, path=env_path)
+
+    # If the binary cannot be found on disk, let the shell handle it
+    # (it could be an unlisted shell-bound alias or function unknown to Python).
+    if resolved_binary is None:
+        return True, None
+
+    return False, resolved_binary
