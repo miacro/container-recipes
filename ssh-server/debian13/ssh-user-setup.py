@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import logging
+import pwd
 
 
 def run_cmd(cmd, cwd=None, capture=False):
@@ -236,6 +237,20 @@ def set_ssh_public_key(ssh_user, ssh_uid):
     os.chmod(auth_file, 0o600)
 
 
+def drop_into_user(user_name):
+    pwd_cur = pwd.getpwuid(os.getuid())
+    cur_name = pwd_cur.pw_name
+    if cur_name == user_name:
+        return
+    pwd_user = pwd.getpwnam(user_name)
+    logging.info("Dropping user from {} to {}".format(cur_name, user_name))
+    user_uid = pwd_user.pw_uid
+    user_gid = pwd_user.pw_gid
+    os.initgroups(user_name, user_gid)
+    os.setgid(user_gid)
+    os.setuid(user_uid)
+
+
 def main():
     logging.getLogger().setLevel(logging.INFO)
     logging.basicConfig(format="[%(asctime)s]:%(levelname)s: %(message)s")
@@ -245,6 +260,7 @@ def main():
             logging.warning("SSH_SERVING user not specified, skip user setup")
             return
     add_ssh_user(ssh_login_info)
+    drop_into_user(ssh_login_info["ssh_user"])
     set_ssh_public_key(ssh_login_info["ssh_user"], ssh_login_info["ssh_uid"])
 
 

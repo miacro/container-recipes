@@ -195,6 +195,7 @@ def get_container_run_command(
     start_cmd = """
 podman run %s \
 --name %s \
+--init \
 -p 22 \
 %s \
 --userns=keep-id \
