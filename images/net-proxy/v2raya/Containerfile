@@ -1,17 +1,20 @@
 # ================= 第一阶段：专门用来下载规则文件 =================
 FROM alpine:latest AS downloader
 
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl tar
 
 WORKDIR /download
-RUN curl -L -o geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat && \
-    curl -L -o geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
 
-RUN curl -L -o xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip \
+ENV CURL_OPTS="-L --retry 5 --retry-delay 3 --connect-timeout 15"
+
+RUN curl ${CURL_OPTS} -o geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat \
+    && curl ${CURL_OPTS} -o geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
+
+RUN curl ${CURL_OPTS} -o xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip \
     && unzip xray.zip -d xray_dir
 
 RUN V2RAYA_URL=$(curl -s https://api.github.com/repos/v2rayA/v2rayA/releases/latest | grep "browser_download_url.*v2raya_linux_x64" | head -n 1 | cut -d '"' -f 4) \
-    && curl -L -o v2raya $V2RAYA_URL \
+    && curl ${CURL_OPTS} -o v2raya ${V2RAYA_URL} \
     && chmod +x v2raya
 
 
