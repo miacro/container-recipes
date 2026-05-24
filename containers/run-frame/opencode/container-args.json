@@ -1,0 +1,6 @@
+{
+  "image_name": "run-frame/opencode",
+  "container_name": "opencode-web-server",
+  //"command": ["--run-user", "miacro", "echo", "$PATH", "&&", "opencode", "web", "--port=9080", "--hostname=0.0.0.0"]
+  "command": "--run-user miacro echo '$PATH' && opencode web --port=9080 --hostname=0.0.0.0"
+}

@@ -1,0 +1,6 @@
+{
+  "proxy_server": "opencode"
+  // "command": ["source", "/etc/profile", "&&", "opencode", "web", "--port", "9080", "--hostname", "0.0.0.0"]
+  // "command": "source /etc/profile && opencode web --port 9080 --hostname 0.0.0.0"
+  // "command": ["source", "/etc/profile", "&&", "ls", "/"]
+}

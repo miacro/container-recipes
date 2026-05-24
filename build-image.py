@@ -5,6 +5,7 @@ import sys
 import os
 
 IMAGE_BASE_DIR = os.path.dirname(os.path.realpath(__file__))
+IMAGE_BASE_DIR = os.path.join(IMAGE_BASE_DIR, "images")
 
 
 def run_cmd(cmd, cwd=None, capture=False):

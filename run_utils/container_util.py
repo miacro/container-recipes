@@ -215,8 +215,12 @@ podman run %s \
     #     background processes after the container exits
     if not extra_args:
         extra_args = []
-    else:
+    elif isinstance(extra_args, str):
+        extra_args = [extra_args]
+    elif isinstance(extra_args, (list, tuple)):
         extra_args = [*extra_args]
+    else:
+        assert 0, "Invalid extra_args: {}".format(extra_args)
     if ipc_host:
         extra_args += ["--ipc=host"]
 

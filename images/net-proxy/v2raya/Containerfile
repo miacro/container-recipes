@@ -1,0 +1,38 @@
+# ================= 第一阶段：专门用来下载规则文件 =================
+FROM alpine:latest AS downloader
+
+RUN apk add --no-cache curl
+
+WORKDIR /download
+RUN curl -L -o geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat && \
+    curl -L -o geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
+
+
+FROM alpine:latest
+
+ENV V2RAYA_V2RAY_BIN=/usr/bin/xray
+ENV V2RAYA_LOG_DIR=/var/log/v2raya
+ENV XRAY_LOCATION_ASSET=/usr/share/xray
+
+ARG TARGET_TZ=Asia/Shanghai
+RUN apk update && \
+    apk add --no-cache \
+    ca-certificates \
+    iptables \
+    ip6tables \
+    iproute2 \
+    bash \
+    xray \
+    v2raya \
+    tzdata \
+    && cp /usr/share/zoneinfo/${TARGET_TZ} /etc/localtime \
+    && echo "${TARGET_TZ}" > /etc/timezone \
+    && apk del tzdata \
+    && mkdir -p ${V2RAYA_LOG_DIR} ${XRAY_LOCATION_ASSET}
+
+COPY --from=downloader /download/geoip.dat ${XRAY_LOCATION_ASSET}/geoip.dat
+COPY --from=downloader /download/geosite.dat ${XRAY_LOCATION_ASSET}/geosite.dat
+
+EXPOSE 2017
+
+CMD ["v2raya", "--address", "0.0.0.0:2017", "--log-disable-file"]

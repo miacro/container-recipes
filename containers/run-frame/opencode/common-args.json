@@ -1,0 +1,16 @@
+{
+  "log_level": "INFO",
+  "port_maps": ["9080:9080"],
+  "volume_maps": [
+    "~:ro",
+    "/mnt/Workspace:ro",
+    "/mnt/Warehouse:ro",
+    "~/.config/opencode:rw",
+    "~/.cache/opencode:rw",
+    "~/.local/share/opencode:rw",
+    "~/.local/state/opencode:rw",
+    "~/.zsh_history:rw",
+    "~/.bash_history:rw",
+    "~/Workspace/repos-ai:rw"
+  ]
+}
