@@ -15,8 +15,11 @@ ENV V2RAYA_LOG_DIR=/var/log/v2raya
 ENV XRAY_LOCATION_ASSET=/usr/share/xray
 
 ARG TARGET_TZ=Asia/Shanghai
-RUN apk update && \
-    apk add --no-cache \
+RUN sed -i 's/main/community/g' /etc/apk/repositories || true\
+    && echo "https://dl-cdn.alpinelinux.org/alpine/latest-stable/community" >> /etc/apk/repositories \
+    && echo "https://dl-cdn.alpinelinux.org/alpine/latest-stable/main" >> /etc/apk/repositories \
+    && apk update \
+    && apk add --no-cache \
     ca-certificates \
     iptables \
     ip6tables \
