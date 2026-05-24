@@ -7,34 +7,41 @@ WORKDIR /download
 RUN curl -L -o geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat && \
     curl -L -o geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
 
+RUN curl -L -o xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip \
+    && unzip xray.zip -d xray_dir
+
+RUN V2RAYA_URL=$(curl -s https://api.github.com/repos/v2rayA/v2rayA/releases/latest | grep "browser_download_url.*v2raya_linux_x64" | head -n 1 | cut -d '"' -f 4) \
+    && curl -L -o v2raya $V2RAYA_URL \
+    && chmod +x v2raya
+
 
 FROM alpine:latest
 
-ENV V2RAYA_V2RAY_BIN=/usr/bin/xray
-ENV V2RAYA_LOG_DIR=/var/log/v2raya
-ENV XRAY_LOCATION_ASSET=/usr/share/xray
-
 ARG TARGET_TZ=Asia/Shanghai
-RUN sed -i 's/main/community/g' /etc/apk/repositories || true\
-    && echo "https://dl-cdn.alpinelinux.org/alpine/latest-stable/community" >> /etc/apk/repositories \
-    && echo "https://dl-cdn.alpinelinux.org/alpine/latest-stable/main" >> /etc/apk/repositories \
-    && apk update \
+
+RUN apk update \
     && apk add --no-cache \
     ca-certificates \
     iptables \
     ip6tables \
     iproute2 \
     bash \
-    xray \
-    v2raya \
     tzdata \
+    \
     && cp /usr/share/zoneinfo/${TARGET_TZ} /etc/localtime \
     && echo "${TARGET_TZ}" > /etc/timezone \
-    && apk del tzdata \
-    && mkdir -p ${V2RAYA_LOG_DIR} ${XRAY_LOCATION_ASSET}
+    && apk del tzdata
 
+ENV V2RAYA_V2RAY_BIN=/usr/bin/xray
+ENV V2RAYA_LOG_DIR=/var/log/v2raya
+ENV XRAY_LOCATION_ASSET=/usr/share/xray
+
+COPY --from=downloader /download/xray_dir/xray /usr/bin/xray
+COPY --from=downloader /download/v2raya /usr/bin/v2raya
 COPY --from=downloader /download/geoip.dat ${XRAY_LOCATION_ASSET}/geoip.dat
 COPY --from=downloader /download/geosite.dat ${XRAY_LOCATION_ASSET}/geosite.dat
+
+RUN mkdir -p ${V2RAYA_LOG_DIR}
 
 EXPOSE 2017
 
