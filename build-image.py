@@ -28,6 +28,13 @@ def check_image(image_name, base_dir=IMAGE_BASE_DIR):
             assert 0, "Image {} not in base dir {}".format(image_dir, base_dir)
     else:
         image_dir = os.path.join(base_dir, image_name)
+        if not os.path.exists(image_dir):
+            base_name = os.path.basename(base_dir)
+            image_head = image_name.split(os.path.sep)[0]
+            if image_head == base_name:
+                image_name = image_name[len(image_head):]
+                image_name = image_name.lstrip(os.path.sep)
+                image_dir = os.path.join(base_dir, image_name)
     image_file = None
     for file in ["Containerfile", "Dockerfile"]:
         image_file = image_dir
