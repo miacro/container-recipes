@@ -17,6 +17,11 @@ RUN V2RAYA_URL=$(curl -s https://api.github.com/repos/v2rayA/v2rayA/releases/lat
     && curl ${CURL_OPTS} -o v2raya ${V2RAYA_URL} \
     && chmod +x v2raya
 
+RUN SINGBOX_URL=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep "browser_download_url.*linux-amd64.tar.gz" | head -n 1 | cut -d '"' -f 4) \
+    && curl ${CURL_OPTS} -o sing-box.tar.gz ${SINGBOX_URL} \
+    && tar -zxvf sing-box.tar.gz \
+    && mv sing-box-*-linux-amd64/sing-box . \
+    && chmod +x sing-box
 
 FROM alpine:latest
 
@@ -41,6 +46,7 @@ ENV XRAY_LOCATION_ASSET=/usr/share/xray
 
 COPY --from=downloader /download/xray_dir/xray /usr/bin/xray
 COPY --from=downloader /download/v2raya /usr/bin/v2raya
+COPY --from=downloader /download/sing-box /usr/bin/sing-box
 COPY --from=downloader /download/geoip.dat ${XRAY_LOCATION_ASSET}/geoip.dat
 COPY --from=downloader /download/geosite.dat ${XRAY_LOCATION_ASSET}/geosite.dat
 
