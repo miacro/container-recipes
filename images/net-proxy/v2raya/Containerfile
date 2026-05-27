@@ -5,7 +5,7 @@ RUN apk add --no-cache curl tar
 
 WORKDIR /download
 
-ENV CURL_OPTS="-L --retry 5 --retry-delay 3 --connect-timeout 15"
+ENV CURL_OPTS="-L --no-keepalive --retry 5 --retry-delay 3 --connect-timeout 15"
 
 RUN curl ${CURL_OPTS} -o geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat \
     && curl ${CURL_OPTS} -o geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
@@ -26,8 +26,10 @@ RUN SINGBOX_URL=$(curl -s https://api.github.com/repos/SagerNet/sing-box/release
 FROM alpine:latest
 
 ARG TARGET_TZ=Asia/Shanghai
-
-RUN apk update \
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/edge/main" > /etc/apk/repositories \
+    && echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
+    \
+    && apk update \
     && apk add --no-cache \
     ca-certificates \
     iptables \
@@ -35,6 +37,7 @@ RUN apk update \
     iproute2 \
     bash \
     tzdata \
+    v2ray \
     \
     && cp /usr/share/zoneinfo/${TARGET_TZ} /etc/localtime \
     && echo "${TARGET_TZ}" > /etc/timezone \
@@ -49,6 +52,8 @@ COPY --from=downloader /download/v2raya /usr/bin/v2raya
 COPY --from=downloader /download/sing-box /usr/bin/sing-box
 COPY --from=downloader /download/geoip.dat ${XRAY_LOCATION_ASSET}/geoip.dat
 COPY --from=downloader /download/geosite.dat ${XRAY_LOCATION_ASSET}/geosite.dat
+COPY --from=downloader /download/geoip.dat /usr/share/v2ray/geoip.dat
+COPY --from=downloader /download/geosite.dat /usr/share/v2ray/geosite.dat
 
 RUN mkdir -p ${V2RAYA_LOG_DIR}
 
