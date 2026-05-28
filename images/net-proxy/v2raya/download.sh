@@ -1,40 +1,58 @@
 #!/usr/bin/env bash
 
-# 设置报错即退出
+# Exit immediately if a command exits with a non-zero status
 set -e
 
-echo "========================================="
-echo "  开始直连 GitHub 下载 v2rayA + Xray 组件  "
-echo "========================================="
+echo "================================================================"
+echo " Starting direct download of core components from GitHub"
+echo " (With robust anti-reset and retry mechanisms enabled)"
+echo "================================================================"
 
-# 定义通用的 curl 参数：允许重试 5 次，每次重试间隔 3 秒，显示错误信息
-CURL_OPTS="-L --retry 5 --retry-delay 3 --connect-timeout 15"
+# 1. Create and enter the 'files' directory automatically
+mkdir -p files
+cd files || exit 1
 
-# 1. 下载 Loyalsoldier 社区增强版规则文件
-echo "正在直连下载 GeoIP 和 Geosite 规则文件..."
+# Define robust curl options: 5 retries, 3s delay, 15s timeout
+# [Critical]: Use --http1.1 to bypass GitHub HTTP/2 stream reset errors
+CURL_OPTS="-L --http1.1 --retry 5 --retry-delay 3 --connect-timeout 15"
+
+# 2. Download Loyalsoldier enhanced rule files
+echo "➤ Downloading GeoIP and Geosite rule files..."
 curl $CURL_OPTS -o geoip.dat "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
 curl $CURL_OPTS -o geosite.dat "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
 
-# 2. 下载 Xray-core 二进制文件并解压
-echo "正在直连下载 Xray-core..."
+# 3. Download and extract Xray-core
+echo "➤ Downloading Xray-core..."
 curl $CURL_OPTS -o xray.zip "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip"
-echo "正在解压 Xray..."
+echo "➤ Extracting Xray..."
 unzip -j -o xray.zip xray -d .
 rm -f xray.zip
 
-# 3. 动态获取并下载 v2rayA 二进制文件
-echo "正在获取 v2rayA 最新版本链接..."
-# 这一步同样直连 GitHub API 获取最新的 browser_download_url
+# 4. Fetch the latest release URL and download v2rayA
+echo "➤ Fetching the latest v2rayA release URL..."
 V2RAYA_RAW_URL=$(curl -s https://api.github.com/repos/v2rayA/v2rayA/releases/latest | grep "browser_download_url.*v2raya_linux_x64" | head -n 1 | cut -d '"' -f 4)
-
-echo "正在直连下载 v2rayA..."
+echo "➤ Downloading v2rayA..."
 curl $CURL_OPTS -o v2raya "${V2RAYA_RAW_URL}"
 
-echo "正在赋予执行权限..."
-chmod +x v2raya
-chmod +x xray
+# 5. Fetch the latest release URL, download, and extract sing-box
+echo "➤ Fetching the latest sing-box release URL..."
+SINGBOX_URL=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep "browser_download_url.*linux-amd64.tar.gz" | head -n 1 | cut -d '"' -f 4)
+echo "➤ Downloading sing-box..."
+curl $CURL_OPTS -o sing-box.tar.gz "${SINGBOX_URL}"
+echo "➤ Extracting sing-box..."
+tar -zxvf sing-box.tar.gz
+mv sing-box-*-linux-amd64/sing-box .
+# Clean up unnecessary archives and extracted folders
+rm -rf sing-box-*-linux-amd64 sing-box.tar.gz
 
-echo "========================================="
-echo "       所有文件直连下载完成，目录已就绪!       "
-echo "========================================="
-ls -lh geoip.dat geosite.dat v2raya xray
+# 6. Grant execution permissions to all binaries
+echo "➤ Granting execution permissions..."
+chmod +x v2raya xray sing-box
+
+# Return to the parent directory
+cd ..
+
+echo "================================================================"
+echo " 🎉 All files downloaded successfully and stored in files/ "
+echo "================================================================"
+ls -lh files/
