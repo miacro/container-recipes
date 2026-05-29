@@ -76,5 +76,7 @@ RUN cp ${XRAY_LOCATION_ASSET}/geoip.dat /usr/share/v2ray/geoip.dat \
     && cp ${XRAY_LOCATION_ASSET}/geosite.dat /usr/share/v2ray/geosite.dat
 
 EXPOSE 2017
+# ENV V2RAYA_LOG_FILE=/dev/null
+ENV V2RAYA_LOG_CONSOLE=true
 
-CMD ["v2raya", "--address", "0.0.0.0:2017", "--log-disable-file"]
+CMD ["v2raya", "--address", "0.0.0.0:2017"]

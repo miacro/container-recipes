@@ -2,7 +2,8 @@
 podman run -d \
   --name net-proxy-v2raya \
   --restart always \
-  -p 2017:2017 \
+  -p 2018:2017 \
+  -p 20170:20170 \
   -p 20171:20171 \
   -p 20172:20172 \
   -v /etc/localtime:/etc/localtime:ro \
