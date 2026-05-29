@@ -2,34 +2,34 @@
 FROM alpine:latest AS downloader
 
 # Install required tools for logic checks and extraction
-RUN apk add --no-cache curl tar unzip bash
+RUN apk add --no-cache curl tar unzip bash wget
 
 WORKDIR /download
 
-# Define robust curl options for network fallback (anti-reset, with retries)
-ENV CURL_OPTS="-L --http1.1 --retry 5 --retry-delay 3 --connect-timeout 15"
+# ARG DOWNLOAD="curl -L --http1.1 --retry 5 --retry-delay 3 --connect-timeout 15 -o"
+ARG DOWNLOAD="wget -c --tries=100 --retry-connrefused -O"
 
 # 1. Download geoip.dat independently
-RUN curl ${CURL_OPTS} -o geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
+RUN ${DOWNLOAD} geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
 
 # 2. Download geosite.dat independently
-RUN curl ${CURL_OPTS} -o geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
+RUN ${DOWNLOAD} geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
 
 # 3. Download Xray-core (Dynamic mapping for 64 vs arm64-v8a)
 RUN if [ "$TARGETARCH" = "arm64" ]; then ARCH="arm64-v8a"; else ARCH="64"; fi \
-    && curl ${CURL_OPTS} -o xray.zip "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-${ARCH}.zip" \
+    && ${DOWNLOAD} xray.zip "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-${ARCH}.zip" \
     && unzip -j -o xray.zip xray -d . \
     && rm -f xray.zip
 
 # 4. Download v2rayA (Dynamic mapping for x64 vs arm64)
 RUN if [ "$TARGETARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="x64"; fi \
     && V2RAYA_URL=$(curl -s https://api.github.com/repos/v2rayA/v2rayA/releases/latest | grep "browser_download_url.*v2raya_linux_${ARCH}" | head -n 1 | cut -d '"' -f 4) \
-    && curl ${CURL_OPTS} -o v2raya "$V2RAYA_URL"
+    && ${DOWNLOAD} v2raya "$V2RAYA_URL"
 
 # 5. Download sing-box (Dynamic mapping for amd64 vs arm64)
 RUN if [ "$TARGETARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="amd64"; fi \
     && SINGBOX_URL=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep "browser_download_url.*linux-${ARCH}.tar.gz" | head -n 1 | cut -d '"' -f 4) \
-    && curl ${CURL_OPTS} -o sing-box.tar.gz "$SINGBOX_URL" \
+    && ${DOWNLOAD} sing-box.tar.gz "$SINGBOX_URL" \
     && tar -zxvf sing-box.tar.gz \
     && mv sing-box-*-linux-${ARCH}/sing-box . \
     && rm -rf sing-box-*-linux-${ARCH} sing-box.tar.gz
