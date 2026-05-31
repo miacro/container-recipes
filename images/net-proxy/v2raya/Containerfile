@@ -77,6 +77,6 @@ RUN cp ${XRAY_LOCATION_ASSET}/geoip.dat /usr/share/v2ray/geoip.dat \
 
 EXPOSE 2017
 # ENV V2RAYA_LOG_FILE=/dev/null
-ENV V2RAYA_LOG_CONSOLE=true
+# ENV V2RAYA_LOG_CONSOLE=true
 
 CMD ["v2raya", "--address", "0.0.0.0:2017"]
