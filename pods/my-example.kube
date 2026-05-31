@@ -1,0 +1,9 @@
+[Unit]
+Description=My Example Quadlet Service
+
+[Kube]
+Yaml=my-example.yaml
+
+[Install]
+WantedBy=default.target # for rootless
+# WantedBy=multi-user.target # for root
