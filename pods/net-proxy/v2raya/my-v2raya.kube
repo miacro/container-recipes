@@ -1,0 +1,19 @@
+[Unit]
+Description=My V2rayA Quadlet Service
+After=network-online.target
+
+[Kube]
+Yaml=%h/.config/containers/systemd/my-v2raya.yaml
+
+[Service]
+# KillMode=none
+KillMode=mixed
+SendSIGKILL=no
+
+TimeoutStopSec=120
+ExecStartPre=-/usr/bin/podman system renumber
+ExecStartPre=-/usr/bin/podman kube down %h/.config/containers/systemd/my-v2raya.yaml
+
+[Install]
+WantedBy=default.target # for rootless
+# WantedBy=multi-user.target # for root
