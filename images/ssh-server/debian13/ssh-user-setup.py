@@ -152,7 +152,7 @@ def add_ssh_user(ssh_info):
             (new_shell, sys_user["shell"]),
         ]:
             if val0 != val1:
-                matched = True
+                matched = False
                 break
         if not matched:
             cmd = "usermod"
