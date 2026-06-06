@@ -185,7 +185,10 @@ def set_ssh_public_key(ssh_user, ssh_uid):
             private_file, public_file
         )
     elif not check_file_writable(ssh_dir):
-        msg = "{} is not writable, skip ssh-keygen".format(ssh_dir)
+        if not os.path.exists(ssh_dir) and check_file_writable(home_dir):
+            os.makedirs(ssh_dir, mode=0o700)
+        else:
+            msg = "{} is not writable, skip ssh-keygen".format(ssh_dir)
     elif check_file_writable(ssh_dir):
         gen_key = True
         for cur_file in [private_file, public_file]:
