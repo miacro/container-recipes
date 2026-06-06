@@ -32,7 +32,8 @@ def run_container(
         return
     logging.info("Container {} not found, creating".format(container_name))
     if not run_user:
-        run_user = base_util.get_user_info()["name"]
+        if command:
+            run_user = base_util.get_user_info()["name"]
     start_cmd = container_util.get_container_run_command(
         image_name,
         container_name,
