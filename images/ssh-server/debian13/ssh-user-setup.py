@@ -218,7 +218,7 @@ def set_ssh_public_key(ssh_user, ssh_uid):
     with open(public_file, "rt") as f:
         pub_key = f.read().strip()
     auth_file = os.path.join(ssh_dir, "authorized_keys")
-    if not check_file_writable(auth_file):
+    if os.path.exists(auth_file) and not check_file_writable(auth_file):
         msg = "{} is not writable, skip adding pubkey".format(auth_file)
         logging.info(msg)
         return
