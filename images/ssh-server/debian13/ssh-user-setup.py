@@ -47,6 +47,7 @@ def get_ssh_login_info(not_found_ok=False):
         ("ssh_uid", "SSH_SERVING_UID"),
         ("ssh_user", "SSH_SERVING_USER"),
         ("ssh_shell", "SSH_SERVING_SHELL"),
+        ("ssh_pubkey", "SSH_SERVING_PUBKEY"),
     ]:
         env_value = os.getenv(env_name)
         if not env_value:
@@ -168,7 +169,7 @@ def add_ssh_user(ssh_info):
     run_cmd("{} {}".format(cmd_path, args))
 
 
-def set_ssh_public_key(ssh_user, ssh_uid):
+def set_ssh_public_key(ssh_user, ssh_uid, ssh_pubkey=None):
     sys_info = get_sys_user_info(ssh_user, ssh_uid)
     if sys_info is None:
         assert 0, "User {} with uid {} not found".format(ssh_user, ssh_uid)
@@ -213,10 +214,15 @@ def set_ssh_public_key(ssh_user, ssh_uid):
         chown_path = get_cmd_path("chown")
         cmd = "{} -R {}:{} {}".format(chown_path, ssh_uid, ssh_gid, ssh_dir)
         run_cmd(cmd)
-    if not os.path.exists(public_file):
+    pub_lines = []
+    if ssh_pubkey:
+        pub_lines.append(ssh_pubkey.strip())
+    if os.path.exists(public_file):
+        with open(public_file, "rt") as f:
+            pub_lines.append(f.read().strip())
+    pub_lines = [line for line in pub_lines if line]
+    if not pub_lines:
         return
-    with open(public_file, "rt") as f:
-        pub_key = f.read().strip()
     auth_file = os.path.join(ssh_dir, "authorized_keys")
     if os.path.exists(auth_file) and not check_file_writable(auth_file):
         msg = "{} is not writable, skip adding pubkey".format(auth_file)
@@ -226,14 +232,13 @@ def set_ssh_public_key(ssh_user, ssh_uid):
     if os.path.isfile(auth_file):
         with open(auth_file, "rt") as f:
             auth_lines = f.readlines()
-    pub_found = False
-    for auth_line in auth_lines:
-        if auth_line.strip() == pub_key:
-            pub_found = True
-            break
-    if not pub_found:
+    pub_found = []
+    for pub_key in pub_lines:
+        cur_found = any(l.strip() == pub_key for l in auth_lines)
+        pub_found.append(cur_found)
+    if not all(pub_found):
         auth_lines = "".join(auth_lines)
-        auth_lines = [auth_lines, pub_key]
+        auth_lines = [auth_lines, *pub_lines]
         auth_lines = "\n".join(auth_lines)
         with open(auth_file, "wt") as f:
             f.writelines(auth_lines)
@@ -264,7 +269,11 @@ def main():
             return
     add_ssh_user(ssh_login_info)
     drop_into_user(ssh_login_info["ssh_user"])
-    set_ssh_public_key(ssh_login_info["ssh_user"], ssh_login_info["ssh_uid"])
+    set_ssh_public_key(
+        ssh_login_info["ssh_user"],
+        ssh_login_info["ssh_uid"],
+        ssh_login_info.get("ssh_pubkey", None),
+    )
 
 
 if __name__ == "__main__":
