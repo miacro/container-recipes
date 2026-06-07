@@ -1,6 +1,8 @@
 import logging
 import socket
 import time
+import os
+from . import base_util
 
 
 def ssh_wait_for_ready(host, port=22, timeout=5, attempt=60):
@@ -71,3 +73,36 @@ def ssh_wait_for_ready(host, port=22, timeout=5, attempt=60):
         cur_attempt += 1
         time.sleep(2)
     return False
+
+
+def ssh_load_pubkey():
+    _, pubkey_file = ssh_gen_rsa_key()
+    with open(pubkey_file, "rt") as f:
+        return f.read().strip()
+
+
+def ssh_gen_rsa_key():
+    ssh_dir = os.path.expanduser("~/.ssh")
+    private_file = os.path.join(ssh_dir, "id_rsa")
+    public_file = os.path.join(ssh_dir, "id_rsa.pub")
+    if all(os.path.exists(_) for _ in [private_file, public_file]):
+        return private_file, public_file
+    user_info = base_util.get_user_info()
+    ssh_user = user_info["name"]
+    ssh_uid = user_info["uid"]
+    ssh_gid = user_info["gid"]
+    ssh_user = base_util.get_user_info()["name"]
+    if not os.path.exists(ssh_dir):
+        os.makedirs(ssh_dir, mode=0o700)
+    os.chmod(ssh_dir, 0o700)
+    keygen_path = base_util.cmd_get_path("ssh-keygen", path="/usr/bin:/bin")
+    comment = "{}@{}(by-ssh-server)".format(ssh_user, os.uname().nodename)
+    cmd = "{} -t rsa -b 4096 -C '{}' -f {} -N ''".format(
+        keygen_path, comment, private_file
+    )
+    base_util.cmd_run(cmd)
+    os.chmod(private_file, 0o600)
+    chown_path = base_util.cmd_get_path("chown")
+    cmd = "{} -R {}:{} {}".format(chown_path, ssh_uid, ssh_gid, ssh_dir)
+    base_util.cmd_run(cmd)
+    return private_file, public_file

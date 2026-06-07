@@ -82,11 +82,8 @@ def run_container(image, volume_maps=None, port_maps=None, fresh_container=False
     if running:
         return
     logging.info("Container {} not found, creating".format(container_name))
-    user_home = base_util.get_user_info()["home"]
-    ssh_dir = "{}/.ssh".format(user_home)
     if not volume_maps:
         volume_maps = OrderedDict()
-    volume_maps[ssh_dir] = "{}:{}:rw".format(ssh_dir, ssh_dir)
     start_cmd = container_util.get_container_run_command(
         image["id"],
         container_name,

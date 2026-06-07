@@ -1,5 +1,5 @@
 from typing import List, Dict, Optional, Any, Union
-from . import base_util
+from . import base_util, ssh_util
 import json
 import os
 import logging
@@ -9,6 +9,7 @@ import platform
 import pprint
 import argparse
 import shlex
+import re
 
 
 def cmd_run_podman(
@@ -196,7 +197,6 @@ def get_container_run_command(
 podman run %s \
 --name %s \
 --init \
--p 22 \
 %s \
 --userns=keep-id \
 --network=slirp4netns \
@@ -205,6 +205,7 @@ podman run %s \
 --env SSH_SERVING_UID=%s \
 --env SSH_SERVING_USER=%s \
 --env SSH_SERVING_SHELL=%s \
+--env SSH_SERVING_PUBKEY=%s \
 %s \
 %s \
 %s
@@ -244,10 +245,21 @@ podman run %s \
         volume_maps = OrderedDict()
     port_args = []
     if port_maps:
-        port_args = ["-p {}".format(_) for _ in port_maps]
+        port_args += ["-p {}".format(_) for _ in port_maps]
+        ssh_pattern = r"(^|:)22(/.+)?$"
+        ssh_found = False
+        for pm in port_maps:
+            assert isinstance(pm, str), pm
+            if re.search(ssh_pattern, pm):
+                ssh_found = True
+                break
+        if not ssh_found:
+            port_args.append("-p 22")
     for _, val in volume_maps.items():
         assert isinstance(val, str), val
         volume_args.append("-v {}".format(val))
+    pubkey = ssh_util.ssh_load_pubkey()
+    pubkey = "'{}'".format(pubkey)
     start_cmd = start_cmd % (
         " ".join(ia_args),
         container_name,
@@ -255,6 +267,7 @@ podman run %s \
         user_info["uid"],
         user_info["name"],
         user_info["shell"],
+        pubkey,
         " ".join(extra_args),
         " ".join(volume_args),
         image_name,
