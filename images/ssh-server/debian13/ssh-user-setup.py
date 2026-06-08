@@ -191,6 +191,7 @@ def set_ssh_public_key(ssh_user, ssh_uid, ssh_pubkey=None):
     elif not check_file_writable(ssh_dir):
         if not os.path.exists(ssh_dir) and check_file_writable(home_dir):
             os.makedirs(ssh_dir, mode=0o700)
+            gen_key = True
         else:
             msg = "{} is not writable, skip ssh-keygen".format(ssh_dir)
     elif check_file_writable(ssh_dir):
