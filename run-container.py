@@ -58,6 +58,35 @@ def exec_container(command: str):
     return
 
 
+def check_image_name(image_name):
+    index = image_name.rfind(":")
+    image_body = image_name
+    image_tail = None
+    if index >= 0:
+        image_tail = image_name[index + 1 :]
+        image_body = image_name[:index]
+    all_images = container_util.list_all_images()
+    matched = []
+    for image in all_images:
+        image_repo = image["repo"]
+        image_tag = image["tag"]
+        if not image_repo.endswith(image_body):
+            continue
+        if image_tail:
+            if not image_tag.startswith(image_tail):
+                continue
+        matched.append(image)
+    if not matched:
+        assert 0, "No image found for image name: '{}'".format(image_name)
+    elif len(matched) > 1:
+        cur_images = ["{}:{}".format(_["repo"], _["tag"]) for _ in matched]
+        msg = "Multiple images found for image name: '{}', candidates:\n\t{}".format(
+            image_name, "\n\t".join(cur_images)
+        )
+        assert 0, msg
+    return matched[0]
+
+
 def main():
     logging.getLogger().setLevel(logging.ERROR)
     logging.basicConfig(format="[%(asctime)s]:%(levelname)s: %(message)s")
@@ -99,6 +128,11 @@ def main():
     container_util.init_container_arg_parser(parser)
     args = container_util.parse_container_args(parser)
     logging.getLogger().setLevel(getattr(logging, args.log_level))
+
+    image_info = check_image_name(args.image_name)
+    args.image_name = "{}:{}".format(image_info["repo"], image_info["tag"])
+    if not args.container_name:
+        args.container_name = container_util.get_container_name(image_info["repo"])
 
     volume_maps = OrderedDict()
     if args.volume_file:
