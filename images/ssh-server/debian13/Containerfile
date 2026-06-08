@@ -64,6 +64,12 @@ RUN sed -i -E \
 
 RUN ln -sf bash /bin/sh
 
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get install -y \
+  nodejs \
+  npm
+
 RUN mkdir -p /var/run/sshd
 RUN ssh-keygen -A
 RUN sed -E -i \
@@ -101,9 +107,3 @@ ENV SSH_SERVING_PUBKEY=
 # COPY ./ssh-login-hook.sh /ssh-login-hook.sh
 # RUN echo "session optional pam_exec.so seteuid /ssh-login-hook.sh" >> /etc/pam.d/sshd
 ENTRYPOINT [ "/entrypoint.sh" ]
-
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,target=/var/lib/apt,sharing=locked \
-  apt-get install -y \
-  nodejs \
-  npm
