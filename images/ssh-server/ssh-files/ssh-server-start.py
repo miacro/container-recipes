@@ -70,7 +70,6 @@ def exec_command(command):
 
 def exec_by_user(command, run_user):
     command = cmd_join(command, safely=True)  # not expand vars
-    exec_path = "/ssh-server-exec-su.sh"
     exec_path = cmd_get_path("su")
     exec_args = [exec_path, run_user, command]
     exec_args = [exec_path, "-l", run_user, "-c", command]

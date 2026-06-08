@@ -136,6 +136,10 @@ def add_ssh_user(ssh_info):
     cmd, args = None, None
     sys_user = get_sys_user_info(user_name=new_name)
     sys_user_by_uid = get_sys_user_info(user_uid=new_uid)
+    if sys_user is not None:
+        new_home = sys_user["home"]
+    elif sys_user_by_uid is not None:
+        new_home = sys_user_by_uid["home"]
     if sys_user_by_uid is not None and sys_user_by_uid["name"] != new_name:
         other_name = sys_user_by_uid["name"]
         msg = "Another user {} owns the uid {}, deleting".format(other_name, new_uid)
