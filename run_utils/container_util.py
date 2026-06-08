@@ -204,6 +204,7 @@ podman run %s \
 --user=root \
 --env SSH_SERVING_UID=%s \
 --env SSH_SERVING_USER=%s \
+--env SSH_SERVING_HOME=%s \
 --env SSH_SERVING_SHELL=%s \
 --env SSH_SERVING_PUBKEY=%s \
 %s \
@@ -266,6 +267,7 @@ podman run %s \
         " ".join(port_args),
         user_info["uid"],
         user_info["name"],
+        user_info["home"],
         user_info["shell"],
         pubkey,
         " ".join(extra_args),

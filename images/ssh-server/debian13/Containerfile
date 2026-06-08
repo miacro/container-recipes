@@ -96,6 +96,7 @@ COPY ./entrypoint.sh /entrypoint.sh
 ENV SSH_SERVING_UID=
 ENV SSH_SERVING_USER=
 ENV SSH_SERVING_SHELL=
+ENV SSH_SERVING_HOME=
 ENV SSH_SERVING_PUBKEY=
 # COPY ./ssh-login-hook.sh /ssh-login-hook.sh
 # RUN echo "session optional pam_exec.so seteuid /ssh-login-hook.sh" >> /etc/pam.d/sshd

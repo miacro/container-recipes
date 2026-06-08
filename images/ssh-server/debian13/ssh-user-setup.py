@@ -46,6 +46,7 @@ def get_ssh_login_info(not_found_ok=False):
     for ssh_key, env_name in [
         ("ssh_uid", "SSH_SERVING_UID"),
         ("ssh_user", "SSH_SERVING_USER"),
+        ("ssh_home", "SSH_SERVING_HOME"),
         ("ssh_shell", "SSH_SERVING_SHELL"),
         ("ssh_pubkey", "SSH_SERVING_PUBKEY"),
     ]:
@@ -132,14 +133,10 @@ def add_ssh_user(ssh_info):
     new_uid = ssh_info["ssh_uid"]
     new_name = ssh_info["ssh_user"]
     new_shell = ssh_info["ssh_shell"]
-    new_home = "/home/{}".format(new_name)
+    new_home = ssh_info["ssh_home"]
     cmd, args = None, None
     sys_user = get_sys_user_info(user_name=new_name)
     sys_user_by_uid = get_sys_user_info(user_uid=new_uid)
-    if sys_user is not None:
-        new_home = sys_user["home"]
-    elif sys_user_by_uid is not None:
-        new_home = sys_user_by_uid["home"]
     if sys_user_by_uid is not None and sys_user_by_uid["name"] != new_name:
         other_name = sys_user_by_uid["name"]
         msg = "Another user {} owns the uid {}, deleting".format(other_name, new_uid)
@@ -149,6 +146,8 @@ def add_ssh_user(ssh_info):
         sys_user_by_uid = None
 
     if sys_user is not None:
+        if not new_home:
+            new_home = sys_user["home"]
         matched = True
         for val0, val1 in [
             (new_name, sys_user["name"]),
