@@ -10,7 +10,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN [ -f /etc/apt/sources.list ] && mv /etc/apt/sources.list /etc/apt/sources.list.bak || true
 RUN mv /etc/apt/sources.list.d /etc/apt/sources.list.d.bak && \
   mkdir -p /etc/apt/sources.list.d
-COPY ./files/tsinghua.sources /etc/apt/sources.list.d/tsinghua.sources
+COPY ./files/ustc.sources /etc/apt/sources.list.d/ustc.sources
 COPY --chown=root:root --chmod=644 ./files/microsoft.gpg /usr/share/keyrings/microsoft.gpg
 COPY ./files/vscode.sources /etc/apt/sources.list.d/vscode.sources
 
@@ -69,6 +69,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   apt-get install -y \
   nodejs \
   npm
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get install -y \
+  verilator \
+  iverilog \
+  gtkwave \
+  yosys \
+  ninja-build
 
 RUN mkdir -p /var/run/sshd
 RUN ssh-keygen -A
