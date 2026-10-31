@@ -32,7 +32,7 @@ def check_image(image_name, base_dir=IMAGE_BASE_DIR):
             base_name = os.path.basename(base_dir)
             image_head = image_name.split(os.path.sep)[0]
             if image_head == base_name:
-                image_name = image_name[len(image_head):]
+                image_name = image_name[len(image_head) :]
                 image_name = image_name.lstrip(os.path.sep)
                 image_dir = os.path.join(base_dir, image_name)
     image_file = None
@@ -63,7 +63,7 @@ def build_image(image_name, base_dir=IMAGE_BASE_DIR, extra_args=None):
             extra_text = extra_args
         else:
             assert 0, "extra_args must be a list or a string"
-    build_cmd = "{} podman build -t {} --network=slirp4netns {} ."
+    build_cmd = "{} podman build -t {} --network=host {} ."
     build_cmd = build_cmd.format(env_text, image_name, extra_text)
     run_cmd(build_cmd, cwd=image_dir)
     return
@@ -90,8 +90,15 @@ def main():
     parser.add_argument(
         "-a",
         "--build-extra-args",
-        nargs="*",
+        action="append",
         help="Extra arguments for the podman build command",
+    )
+    parser.add_argument(
+        "-nc",
+        "--no-cache",
+        action="store_true",
+        default=False,
+        help="Build without cache and always pull the base image",
     )
     args = parser.parse_args()
     image_base_dir = os.path.realpath(args.image_base_dir)
@@ -99,8 +106,13 @@ def main():
     for image_name in args.build_chain:
         image_name = check_image(image_name, base_dir=image_base_dir)
         image_names.append(image_name)
+    extra_args = []
+    if args.no_cache:
+        extra_args.extend(["--no-cache", "--pull=always"])
+    if args.build_extra_args:
+        extra_args.extend(args.build_extra_args)
     for image_name in image_names:
-        build_image(image_name, image_base_dir, extra_args=args.build_extra_args)
+        build_image(image_name, image_base_dir, extra_args=extra_args)
 
 
 if __name__ == "__main__":
