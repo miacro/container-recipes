@@ -199,7 +199,6 @@ podman run %s \
 --init \
 %s \
 --userns=keep-id \
---network=slirp4netns \
 --replace \
 --user=root \
 --env SSH_SERVING_UID=%s \
